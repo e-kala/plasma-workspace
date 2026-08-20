@@ -29,6 +29,9 @@
     <entry name="knownItems" type="StringList" hidden="true">
       <default></default>
     </entry>
+    <entry name="iconOrder" type="StringList" hidden="true">
+      <default></default>
+    </entry>
     <entry name="reverseIconOrder" type="bool">
       <label>Whether to reverse the order of icons in the panel</label>
       <default>false</default>

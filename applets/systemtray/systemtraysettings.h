@@ -37,11 +37,15 @@ public:
     const QStringList shownItems() const;
     const QStringList hiddenItems() const;
 
+    const QStringList itemOrder() const;
+    void setItemOrder(const QStringList &order);
+
     void cleanupPlugin(const QString &pluginId);
 
 Q_SIGNALS:
     void configurationChanged();
     void enabledPluginsChanged(const QStringList &enabledPlugins, const QStringList &disabledPlugins);
+    void itemOrderChanged();
 
 private:
     void loadConfig();
@@ -54,4 +58,5 @@ private:
     QStringList m_extraItems;
     QStringList m_knownItems;
     QStringList m_disabledStatusNotifiers;
+    QStringList m_itemOrder;
 };

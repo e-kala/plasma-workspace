@@ -7,6 +7,7 @@
 #include "sortedsystemtraymodel.h"
 #include "debug.h"
 #include "systemtraymodel.h"
+#include "systemtraysettings.h"
 
 #include <QList>
 
@@ -18,12 +19,19 @@ static const QList<QString> s_categoryOrder = {
     QStringLiteral("Hardware"),
 };
 
-SortedSystemTrayModel::SortedSystemTrayModel(SortingType sorting, QObject *parent)
+SortedSystemTrayModel::SortedSystemTrayModel(SortingType sorting, QObject *parent, QPointer<SystemTraySettings> settings)
     : QSortFilterProxyModel(parent)
     , m_sorting(sorting)
+    , m_settings(settings)
 {
     setSortLocaleAware(true);
     sort(0);
+
+    if (m_settings) {
+        connect(m_settings.data(), &SystemTraySettings::itemOrderChanged, this, [this]() {
+            invalidate();
+        });
+    }
 }
 
 bool SortedSystemTrayModel::lessThan(const QModelIndex &left, const QModelIndex &right) const
@@ -40,6 +48,10 @@ bool SortedSystemTrayModel::lessThan(const QModelIndex &left, const QModelIndex 
 
 bool SortedSystemTrayModel::lessThanConfigurationPage(const QModelIndex &left, const QModelIndex &right) const
 {
+    if (const auto userOrderComparison = compareUserDefinedOrder(left, right)) {
+        return *userOrderComparison < 0;
+    }
+
     const int categoriesComparison = compareCategoriesAlphabetically(left, right);
     if (categoriesComparison == 0) {
         return QSortFilterProxyModel::lessThan(left, right);
@@ -50,13 +62,15 @@ bool SortedSystemTrayModel::lessThanConfigurationPage(const QModelIndex &left, c
 
 bool SortedSystemTrayModel::lessThanSystemTray(const QModelIndex &left, const QModelIndex &right) const
 {
+    if (const auto userOrderComparison = compareUserDefinedOrder(left, right)) {
+        return *userOrderComparison < 0;
+    }
+
     QVariant itemIdLeft = left.data(static_cast<int>(BaseModel::BaseRole::ItemId));
     QVariant itemIdRight = right.data(static_cast<int>(BaseModel::BaseRole::ItemId));
-    if (itemIdRight.toString() == QLatin1String("org.kde.plasma.notifications")) {
-        // return false when at least right is "org.kde.plasma.notifications"
+    if (itemIdLeft.toString() == QLatin1String("org.kde.plasma.notifications")) {
         return false;
-    } else if (itemIdLeft.toString() == QLatin1String("org.kde.plasma.notifications")) {
-        // return true when only left is "org.kde.plasma.notifications"
+    } else if (itemIdRight.toString() == QLatin1String("org.kde.plasma.notifications")) {
         return true;
     }
 
@@ -66,6 +80,36 @@ bool SortedSystemTrayModel::lessThanSystemTray(const QModelIndex &left, const QM
     } else {
         return categoriesComparison < 0;
     }
+}
+
+std::optional<int> SortedSystemTrayModel::compareUserDefinedOrder(const QModelIndex &left, const QModelIndex &right) const
+{
+    if (!m_settings) {
+        return std::nullopt;
+    }
+
+    const QStringList order = m_settings->itemOrder();
+    if (order.isEmpty()) {
+        return std::nullopt;
+    }
+
+    const QString itemIdLeft = left.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
+    const QString itemIdRight = right.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
+
+    int leftIndex = order.indexOf(itemIdLeft);
+    int rightIndex = order.indexOf(itemIdRight);
+
+    if (leftIndex == -1 && rightIndex == -1) {
+        return std::nullopt;
+    }
+    if (leftIndex == -1) {
+        leftIndex = order.size();
+    }
+    if (rightIndex == -1) {
+        rightIndex = order.size();
+    }
+
+    return leftIndex - rightIndex;
 }
 
 int SortedSystemTrayModel::compareCategoriesAlphabetically(const QModelIndex &left, const QModelIndex &right) const

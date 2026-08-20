@@ -18,7 +18,6 @@ import QtQuick.Layouts
 
 import org.kde.kcmutils as KCMUtils
 import org.kde.kirigami as Kirigami
-import org.kde.kitemmodels as KItemModels
 import org.kde.kquickcontrols as KQC
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
@@ -37,6 +36,9 @@ KCMUtils.ScrollViewKCM {
     property list<string> cfg_hiddenItems: []
     property list<string> cfg_extraItems: []
     property list<string> cfg_disabledStatusNotifiers: []
+    property list<string> cfg_iconOrder: []
+
+    property string searchFilterText: ""
 
     // We can share one combobox model across all delegates, they all have the same options
     readonly property var comboBoxModel: {
@@ -62,6 +64,131 @@ KCMUtils.ScrollViewKCM {
 
     readonly property var changedShortcuts: new Map()
     readonly property var changedVisibility: new Map()
+
+    ListModel {
+        id: orderModel
+    }
+
+    readonly property int itemTypeRole: Qt.UserRole + 1
+    readonly property int itemIdRole: Qt.UserRole + 2
+    readonly property int categoryRole: Qt.UserRole + 4
+    readonly property int appletRole: Qt.UserRole + 8
+
+    function findConfigModelIndex(itemId) {
+        const source = Plasmoid.configSystemTrayModel;
+        for (let i = 0; i < source.rowCount(); i++) {
+            const modelIndex = source.index(i, 0);
+            if (modelIndex.data(itemIdRole) === itemId) {
+                return modelIndex;
+            }
+        }
+        return null;
+    }
+
+    function configDataForItemId(itemId) {
+        const modelIndex = findConfigModelIndex(itemId);
+        if (!modelIndex) {
+            return null;
+        }
+        return {
+            "applet": modelIndex.data(appletRole),
+            "decoration": modelIndex.data(Qt.DecorationRole),
+        };
+    }
+
+    function orderModelRowData(modelIndex) {
+        return {
+            "itemId": modelIndex.data(itemIdRole),
+            "displayText": modelIndex.data(Qt.DisplayRole),
+            "itemType": modelIndex.data(itemTypeRole),
+            "category": modelIndex.data(categoryRole),
+        };
+    }
+
+    function initOrderModel() {
+        const source = Plasmoid.configSystemTrayModel;
+        orderModel.clear();
+        for (let i = 0; i < source.rowCount(); i++) {
+            orderModel.append(orderModelRowData(source.index(i, 0)));
+        }
+    }
+
+    readonly property var categoryOrder: ["UnknownCategory", "ApplicationStatus", "Communications", "SystemServices", "Hardware"]
+
+    function categoryOrderIndex(category) {
+        const index = categoryOrder.indexOf(category);
+        return index === -1 ? categoryOrder.indexOf("UnknownCategory") : index;
+    }
+
+    function restoreDefaultOrder() {
+        const notificationsId = "org.kde.plasma.notifications";
+
+        const targetOrder = [];
+        for (let i = 0; i < orderModel.count; i++) {
+            const row = orderModel.get(i);
+            targetOrder.push({
+                "itemId": row.itemId,
+                "displayText": row.displayText,
+                "category": row.category,
+            });
+        }
+        targetOrder.sort((a, b) => {
+            if (a.itemId === notificationsId) {
+                return b.itemId === notificationsId ? 0 : 1;
+            } else if (b.itemId === notificationsId) {
+                return -1;
+            }
+
+            const categoryDiff = categoryOrderIndex(a.category) - categoryOrderIndex(b.category);
+            if (categoryDiff !== 0) {
+                return categoryDiff;
+            }
+            return a.displayText.localeCompare(b.displayText);
+        });
+
+        for (let i = 0; i < targetOrder.length; i++) {
+            let currentIndex = -1;
+            for (let j = i; j < orderModel.count; j++) {
+                if (orderModel.get(j).itemId === targetOrder[i].itemId) {
+                    currentIndex = j;
+                    break;
+                }
+            }
+            if (currentIndex !== -1 && currentIndex !== i) {
+                orderModel.move(currentIndex, i, 1);
+            }
+        }
+
+        cfg_iconOrder = [];
+    }
+
+    function syncOrderModel() {
+        const source = Plasmoid.configSystemTrayModel;
+
+        const liveIds = [];
+        for (let i = 0; i < source.rowCount(); i++) {
+            liveIds.push(source.index(i, 0).data(itemIdRole));
+        }
+
+        for (let i = orderModel.count - 1; i >= 0; i--) {
+            if (liveIds.indexOf(orderModel.get(i).itemId) === -1) {
+                orderModel.remove(i);
+            }
+        }
+
+        const knownIds = [];
+        for (let i = 0; i < orderModel.count; i++) {
+            knownIds.push(orderModel.get(i).itemId);
+        }
+        for (let i = 0; i < source.rowCount(); i++) {
+            const modelIndex = source.index(i, 0);
+            if (knownIds.indexOf(modelIndex.data(itemIdRole)) === -1) {
+                orderModel.append(orderModelRowData(modelIndex));
+            }
+        }
+    }
+
+    Component.onCompleted: initOrderModel()
 
     function saveConfig() {
         for (const [key, value] of changedVisibility.entries()) {
@@ -154,6 +281,11 @@ KCMUtils.ScrollViewKCM {
             if (idsToRemove.length > 0) {
                 iconsPage.changedVisibilityChanged();
             }
+
+            iconsPage.syncOrderModel();
+        }
+        function onRowsInserted() {
+            iconsPage.syncOrderModel();
         }
     }
 
@@ -319,11 +451,7 @@ KCMUtils.ScrollViewKCM {
 
         clip: true
 
-        model: KItemModels.KSortFilterProxyModel {
-            id: sortFilterProxyModel
-            filterCaseSensitivity: Qt.CaseInsensitive
-            Component.onCompleted: sourceModel = Plasmoid.configSystemTrayModel // avoid unnecessary binding, it causes loops
-        }
+        model: orderModel
         reuseItems: true
 
         headerPositioning: ListView.OverlayHeader
@@ -345,30 +473,63 @@ KCMUtils.ScrollViewKCM {
                 },
                 Kirigami.Action {
                     id: searchAction
-                    property string searchText: ""
                     displayComponent: Kirigami.SearchField {
                         onTextChanged: {
                             // reset currentIndex to avoid passing focus to the currentItem when
                             // the model updates
                             itemsList.currentIndex = -1
-                            sortFilterProxyModel.filterString = text
+                            iconsPage.searchFilterText = text
                         }
                     }
+                },
+                Kirigami.Action {
+                    icon.name: "edit-undo"
+                    text: i18nc("@action:button Reset the manually dragged order of system tray entries back to the automatic, category-based order", "Restore default order") // qmllint disable unqualified
+                    enabled: iconsPage.cfg_iconOrder.length > 0
+                    onTriggered: iconsPage.restoreDefaultOrder()
                 }
             ]
         }
 
-        section {
-            property: "category"
-            delegate: Kirigami.ListSectionHeader {
-                required property string section
-
-                text: iconsPage.categoryName(section)
-                width: itemsList.width
+        moveDisplaced: Transition {
+            YAnimator {
+                duration: Kirigami.Units.longDuration
+                easing.type: Easing.InOutQuad
             }
         }
 
-        delegate: TrayItemDelegate {}
+        delegate: Item {
+            id: delegateRoot
+
+            required property string category
+            required property string displayText
+            required property int index
+            required property string itemId
+            required property string itemType
+
+            readonly property var configData: iconsPage.configDataForItemId(itemId)
+            readonly property var applet: configData ? configData.applet : null
+            readonly property var decoration: configData ? configData.decoration : undefined
+
+            readonly property bool matchesFilter: !iconsPage.searchFilterText || displayText.toLowerCase().indexOf(iconsPage.searchFilterText.toLowerCase()) !== -1
+            visible: matchesFilter
+            width: itemsList.width
+            implicitHeight: trayItemDelegate.implicitHeight
+            height: visible ? implicitHeight : 0
+
+            TrayItemDelegate {
+                id: trayItemDelegate
+                anchors.left: parent.left
+                anchors.right: parent.right
+                applet: delegateRoot.applet
+                category: delegateRoot.category
+                decoration: delegateRoot.decoration
+                displayText: delegateRoot.displayText
+                index: delegateRoot.index
+                itemId: delegateRoot.itemId
+                itemType: delegateRoot.itemType
+            }
+        }
     }
 
     // Re-add separator line between footer and list view
@@ -381,13 +542,12 @@ KCMUtils.ScrollViewKCM {
         id: listItem
 
         required property var applet
+        required property string category
         required property var decoration
         required property string displayText
         required property int index
         required property string itemId
         required property string itemType
-
-        width: itemsList.width
 
         Kirigami.Theme.useAlternateBackgroundColor: true
 
@@ -409,6 +569,26 @@ KCMUtils.ScrollViewKCM {
                 width: parent.width
                 spacing: Kirigami.Units.smallSpacing
 
+                Kirigami.ListItemDragHandle {
+                    listItem: listItem
+                    listView: itemsList
+                    enabled: iconsPage.searchFilterText.length === 0
+                    visible: enabled
+
+                    onMoveRequested: (oldIndex, newIndex) => {
+                        if (oldIndex === newIndex || oldIndex < 0 || newIndex < 0) {
+                            return;
+                        }
+                        orderModel.move(oldIndex, newIndex, 1);
+
+                        const order = [];
+                        for (let i = 0; i < orderModel.count; i++) {
+                            order.push(orderModel.get(i).itemId);
+                        }
+                        iconsPage.cfg_iconOrder = order;
+                    }
+                }
+
                 Kirigami.Icon {
                     implicitWidth: itemsList.iconSize
                     implicitHeight: itemsList.iconSize
@@ -416,17 +596,32 @@ KCMUtils.ScrollViewKCM {
                     animated: false
                 }
 
-                QQC2.Label {
-                    id: nameLabel
+                ColumnLayout {
                     Layout.fillWidth: true
-                    maximumLineCount: 1
-                    text: listItem.displayText
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
+                    spacing: 0
 
-                    QQC2.ToolTip {
-                        visible: listItem.hovered && nameLabel.truncated
-                        text: nameLabel.text
+                    QQC2.Label {
+                        id: nameLabel
+                        Layout.fillWidth: true
+                        maximumLineCount: 1
+                        text: listItem.displayText
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+
+                        QQC2.ToolTip {
+                            visible: listItem.hovered && nameLabel.truncated
+                            text: nameLabel.text
+                        }
+                    }
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        maximumLineCount: 1
+                        text: iconsPage.categoryName(listItem.category)
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        font: Kirigami.Theme.smallFont
+                        color: Kirigami.Theme.disabledTextColor
                     }
                 }
 

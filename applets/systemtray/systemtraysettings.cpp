@@ -16,6 +16,7 @@ static const QString SHOW_ALL_ITEMS_KEY = QStringLiteral("showAllItems");
 static const QString SHOWN_ITEMS_KEY = QStringLiteral("shownItems");
 static const QString HIDDEN_ITEMS_KEY = QStringLiteral("hiddenItems");
 static const QString DISABLED_SNIS_KEY = QStringLiteral("disabledStatusNotifiers");
+static const QString ICON_ORDER_KEY = QStringLiteral("iconOrder");
 
 SystemTraySettings::SystemTraySettings(KConfigLoader *config, QObject *parent)
     : QObject(parent)
@@ -96,6 +97,21 @@ const QStringList SystemTraySettings::hiddenItems() const
     return config->property(HIDDEN_ITEMS_KEY).toStringList();
 }
 
+const QStringList SystemTraySettings::itemOrder() const
+{
+    return m_itemOrder;
+}
+
+void SystemTraySettings::setItemOrder(const QStringList &order)
+{
+    if (order == m_itemOrder) {
+        return;
+    }
+    m_itemOrder = order;
+    writeConfigValue(ICON_ORDER_KEY, m_itemOrder);
+    Q_EMIT itemOrderChanged();
+}
+
 void SystemTraySettings::cleanupPlugin(const QString &pluginId)
 {
     removeKnownPlugin(pluginId);
@@ -108,6 +124,11 @@ void SystemTraySettings::cleanupPlugin(const QString &pluginId)
     QStringList hidden = hiddenItems();
     hidden.removeAll(pluginId);
     writeConfigValue(HIDDEN_ITEMS_KEY, hidden);
+
+    if (m_itemOrder.removeAll(pluginId) > 0) {
+        writeConfigValue(ICON_ORDER_KEY, m_itemOrder);
+        Q_EMIT itemOrderChanged();
+    }
 }
 
 void SystemTraySettings::loadConfig()
@@ -126,6 +147,12 @@ void SystemTraySettings::loadConfig()
         notifyAboutChangedEnabledPlugins(extraItemsOld, m_extraItems);
     }
     m_disabledStatusNotifiers = config->property(DISABLED_SNIS_KEY).toStringList();
+
+    QStringList itemOrder = config->property(ICON_ORDER_KEY).toStringList();
+    if (itemOrder != m_itemOrder) {
+        m_itemOrder = itemOrder;
+        Q_EMIT itemOrderChanged();
+    }
 
     Q_EMIT configurationChanged();
 }

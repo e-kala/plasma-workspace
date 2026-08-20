@@ -6,7 +6,12 @@
 
 #pragma once
 
+#include <optional>
+
+#include <QPointer>
 #include <QSortFilterProxyModel>
+
+class SystemTraySettings;
 
 class SortedSystemTrayModel : public QSortFilterProxyModel
 {
@@ -17,7 +22,7 @@ public:
         SystemTray,
     };
 
-    explicit SortedSystemTrayModel(SortingType sorting, QObject *parent = nullptr);
+    explicit SortedSystemTrayModel(SortingType sorting, QObject *parent = nullptr, QPointer<SystemTraySettings> settings = nullptr);
 
 protected:
     bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const override;
@@ -29,5 +34,8 @@ private:
     int compareCategoriesAlphabetically(const QModelIndex &left, const QModelIndex &right) const;
     int compareCategoriesOrderly(const QModelIndex &left, const QModelIndex &right) const;
 
+    std::optional<int> compareUserDefinedOrder(const QModelIndex &left, const QModelIndex &right) const;
+
     SortingType m_sorting;
+    QPointer<SystemTraySettings> m_settings;
 };
