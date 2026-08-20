@@ -66,14 +66,6 @@ bool SortedSystemTrayModel::lessThanSystemTray(const QModelIndex &left, const QM
         return *userOrderComparison < 0;
     }
 
-    QVariant itemIdLeft = left.data(static_cast<int>(BaseModel::BaseRole::ItemId));
-    QVariant itemIdRight = right.data(static_cast<int>(BaseModel::BaseRole::ItemId));
-    if (itemIdLeft.toString() == QLatin1String("org.kde.plasma.notifications")) {
-        return false;
-    } else if (itemIdRight.toString() == QLatin1String("org.kde.plasma.notifications")) {
-        return true;
-    }
-
     const int categoriesComparison = compareCategoriesOrderly(left, right);
     if (categoriesComparison == 0) {
         return QSortFilterProxyModel::lessThan(left, right);

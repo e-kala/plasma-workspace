@@ -121,8 +121,6 @@ KCMUtils.ScrollViewKCM {
     }
 
     function restoreDefaultOrder() {
-        const notificationsId = "org.kde.plasma.notifications";
-
         const targetOrder = [];
         for (let i = 0; i < orderModel.count; i++) {
             const row = orderModel.get(i);
@@ -133,12 +131,6 @@ KCMUtils.ScrollViewKCM {
             });
         }
         targetOrder.sort((a, b) => {
-            if (a.itemId === notificationsId) {
-                return b.itemId === notificationsId ? 0 : 1;
-            } else if (b.itemId === notificationsId) {
-                return -1;
-            }
-
             const categoryDiff = categoryOrderIndex(a.category) - categoryOrderIndex(b.category);
             if (categoryDiff !== 0) {
                 return categoryDiff;
