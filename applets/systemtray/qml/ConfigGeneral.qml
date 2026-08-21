@@ -73,6 +73,23 @@ KCMUtils.ScrollViewKCM {
     readonly property int itemIdRole: Qt.UserRole + 2
     readonly property int categoryRole: Qt.UserRole + 4
     readonly property int appletRole: Qt.UserRole + 8
+    readonly property int dataEngineSourceRole: Qt.UserRole + 107
+
+    function rowStableKey(modelIndex) {
+        const source = modelIndex.data(dataEngineSourceRole);
+        return source ? modelIndex.data(itemIdRole) + " " + source : modelIndex.data(itemIdRole);
+    }
+
+    function findConfigModelIndexByStableKey(stableKey) {
+        const source = Plasmoid.configSystemTrayModel;
+        for (let i = 0; i < source.rowCount(); i++) {
+            const modelIndex = source.index(i, 0);
+            if (rowStableKey(modelIndex) === stableKey) {
+                return modelIndex;
+            }
+        }
+        return null;
+    }
 
     function findConfigModelIndex(itemId) {
         const source = Plasmoid.configSystemTrayModel;
@@ -99,6 +116,7 @@ KCMUtils.ScrollViewKCM {
     function orderModelRowData(modelIndex) {
         return {
             "itemId": modelIndex.data(itemIdRole),
+            "stableKey": rowStableKey(modelIndex),
             "displayText": modelIndex.data(Qt.DisplayRole),
             "itemType": modelIndex.data(itemTypeRole),
             "category": modelIndex.data(categoryRole),
@@ -160,35 +178,38 @@ KCMUtils.ScrollViewKCM {
     function syncOrderModel() {
         const source = Plasmoid.configSystemTrayModel;
 
-        const liveIds = [];
+        const liveKeys = [];
         for (let i = 0; i < source.rowCount(); i++) {
-            const id = source.index(i, 0).data(itemIdRole);
-            if (id) {
-                liveIds.push(id);
+            const modelIndex = source.index(i, 0);
+            if (modelIndex.data(itemIdRole)) {
+                liveKeys.push(rowStableKey(modelIndex));
             }
         }
 
         for (let i = orderModel.count - 1; i >= 0; i--) {
-            if (liveIds.indexOf(orderModel.get(i).itemId) === -1) {
+            if (liveKeys.indexOf(orderModel.get(i).stableKey) === -1) {
                 orderModel.remove(i);
             }
         }
 
-        const knownIds = [];
+        const knownKeys = [];
         for (let i = 0; i < orderModel.count; i++) {
-            knownIds.push(orderModel.get(i).itemId);
+            knownKeys.push(orderModel.get(i).stableKey);
         }
 
         for (let i = source.rowCount() - 1; i >= 0; i--) {
             const modelIndex = source.index(i, 0);
-            const itemId = modelIndex.data(itemIdRole);
-            if (!itemId || knownIds.indexOf(itemId) !== -1) {
+            if (!modelIndex.data(itemIdRole)) {
+                continue;
+            }
+            const stableKey = rowStableKey(modelIndex);
+            if (knownKeys.indexOf(stableKey) !== -1) {
                 continue;
             }
 
             let insertIndex = orderModel.count;
             for (let j = i + 1; j < source.rowCount(); j++) {
-                const anchorIndex = knownIds.indexOf(source.index(j, 0).data(itemIdRole));
+                const anchorIndex = knownKeys.indexOf(rowStableKey(source.index(j, 0)));
                 if (anchorIndex !== -1) {
                     insertIndex = anchorIndex;
                     break;
@@ -196,14 +217,14 @@ KCMUtils.ScrollViewKCM {
             }
 
             orderModel.insert(insertIndex, orderModelRowData(modelIndex));
-            knownIds.splice(insertIndex, 0, itemId);
+            knownKeys.splice(insertIndex, 0, stableKey);
         }
     }
 
-    function refreshOrderModelRow(itemId) {
+    function refreshOrderModelRow(stableKey) {
         for (let i = 0; i < orderModel.count; i++) {
-            if (orderModel.get(i).itemId === itemId) {
-                const modelIndex = findConfigModelIndex(itemId);
+            if (orderModel.get(i).stableKey === stableKey) {
+                const modelIndex = findConfigModelIndexByStableKey(stableKey);
                 if (modelIndex) {
                     orderModel.set(i, orderModelRowData(modelIndex));
                 }
@@ -315,8 +336,11 @@ KCMUtils.ScrollViewKCM {
         function onDataChanged(topLeft, bottomRight) {
             let needsSync = false;
             for (let i = topLeft.row; i <= bottomRight.row; i++) {
-                const itemId = Plasmoid.configSystemTrayModel.index(i, 0).data(iconsPage.itemIdRole);
-                if (itemId && !iconsPage.refreshOrderModelRow(itemId)) {
+                const modelIndex = Plasmoid.configSystemTrayModel.index(i, 0);
+                if (!modelIndex.data(iconsPage.itemIdRole)) {
+                    continue;
+                }
+                if (!iconsPage.refreshOrderModelRow(iconsPage.rowStableKey(modelIndex))) {
                     needsSync = true;
                 }
             }

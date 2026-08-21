@@ -85,11 +85,8 @@ std::optional<int> SortedSystemTrayModel::compareUserDefinedOrder(const QModelIn
         return std::nullopt;
     }
 
-    const QString itemIdLeft = left.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
-    const QString itemIdRight = right.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
-
-    int leftIndex = order.indexOf(itemIdLeft);
-    int rightIndex = order.indexOf(itemIdRight);
+    int leftIndex = orderIndexForRow(left, order);
+    int rightIndex = orderIndexForRow(right, order);
 
     if (leftIndex == -1 && rightIndex == -1) {
         return std::nullopt;
@@ -102,6 +99,33 @@ std::optional<int> SortedSystemTrayModel::compareUserDefinedOrder(const QModelIn
     }
 
     return leftIndex - rightIndex;
+}
+
+int SortedSystemTrayModel::orderIndexForRow(const QModelIndex &index, const QStringList &order) const
+{
+    const QString itemId = index.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
+    if (itemId.isEmpty()) {
+        return -1;
+    }
+
+    int occurrence = 0;
+    for (int row = 0; row < index.row(); ++row) {
+        if (index.model()->index(row, 0, index.parent()).data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString() == itemId) {
+            ++occurrence;
+        }
+    }
+
+    int orderIndex = -1;
+    int searchFrom = 0;
+    for (int seen = 0; seen <= occurrence; ++seen) {
+        orderIndex = order.indexOf(itemId, searchFrom);
+        if (orderIndex == -1) {
+            break;
+        }
+        searchFrom = orderIndex + 1;
+    }
+
+    return orderIndex;
 }
 
 int SortedSystemTrayModel::compareCategoriesAlphabetically(const QModelIndex &left, const QModelIndex &right) const

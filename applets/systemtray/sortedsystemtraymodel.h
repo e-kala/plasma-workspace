@@ -35,6 +35,7 @@ private:
     int compareCategoriesOrderly(const QModelIndex &left, const QModelIndex &right) const;
 
     std::optional<int> compareUserDefinedOrder(const QModelIndex &left, const QModelIndex &right) const;
+    int orderIndexForRow(const QModelIndex &index, const QStringList &order) const;
 
     SortingType m_sorting;
     QPointer<SystemTraySettings> m_settings;
