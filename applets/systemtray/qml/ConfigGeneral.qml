@@ -247,6 +247,16 @@ KCMUtils.ScrollViewKCM {
         cfg_iconOrder = order;
     }
 
+    function refocusReorderButton(usedButton, otherButton) {
+        Qt.callLater(() => {
+            if (usedButton.enabled) {
+                usedButton.forceActiveFocus();
+            } else {
+                otherButton.forceActiveFocus();
+            }
+        });
+    }
+
     Component.onCompleted: initOrderModel()
 
     function saveConfig() {
@@ -674,17 +684,25 @@ KCMUtils.ScrollViewKCM {
                     visible: iconsPage.searchFilterText.length === 0
 
                     ReorderButton {
+                        id: upButton
                         icon.name: "go-up-symbolic"
                         enabled: listItem.index > 0
                         accessibleText: i18nc("@action:button", "Move entry up")
-                        onClicked: iconsPage.moveOrderModelEntry(listItem.index, listItem.index - 1)
+                        onClicked: {
+                            iconsPage.moveOrderModelEntry(listItem.index, listItem.index - 1);
+                            iconsPage.refocusReorderButton(upButton, downButton);
+                        }
                     }
 
                     ReorderButton {
+                        id: downButton
                         icon.name: "go-down-symbolic"
                         enabled: listItem.index < orderModel.count - 1
                         accessibleText: i18nc("@action:button", "Move entry down")
-                        onClicked: iconsPage.moveOrderModelEntry(listItem.index, listItem.index + 1)
+                        onClicked: {
+                            iconsPage.moveOrderModelEntry(listItem.index, listItem.index + 1);
+                            iconsPage.refocusReorderButton(downButton, upButton);
+                        }
                     }
                 }
 
