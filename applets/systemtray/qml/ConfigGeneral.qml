@@ -234,6 +234,19 @@ KCMUtils.ScrollViewKCM {
         return false;
     }
 
+    function moveOrderModelEntry(oldIndex, newIndex) {
+        if (oldIndex === newIndex || oldIndex < 0 || newIndex < 0 || oldIndex >= orderModel.count || newIndex >= orderModel.count) {
+            return;
+        }
+        orderModel.move(oldIndex, newIndex, 1);
+
+        const order = [];
+        for (let i = 0; i < orderModel.count; i++) {
+            order.push(orderModel.get(i).itemId);
+        }
+        cfg_iconOrder = order;
+    }
+
     Component.onCompleted: initOrderModel()
 
     function saveConfig() {
@@ -596,6 +609,23 @@ KCMUtils.ScrollViewKCM {
     // Re-add separator line between footer and list view
     extraFooterTopPadding: true
 
+    component ReorderButton: QQC2.ToolButton {
+        id: reorderButton
+
+        required property string accessibleText
+
+        display: QQC2.AbstractButton.IconOnly
+        icon.width: Kirigami.Units.iconSizes.small
+        icon.height: Kirigami.Units.iconSizes.small
+        implicitWidth: Kirigami.Units.iconSizes.small + topPadding + bottomPadding
+        implicitHeight: implicitWidth
+
+        Accessible.name: accessibleText
+        QQC2.ToolTip.text: accessibleText
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+    }
+
     /*!
     * Delegate representing each system tray item.
     */
@@ -636,17 +666,25 @@ KCMUtils.ScrollViewKCM {
                     enabled: iconsPage.searchFilterText.length === 0
                     visible: enabled
 
-                    onMoveRequested: (oldIndex, newIndex) => {
-                        if (oldIndex === newIndex || oldIndex < 0 || newIndex < 0) {
-                            return;
-                        }
-                        orderModel.move(oldIndex, newIndex, 1);
+                    onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
+                }
 
-                        const order = [];
-                        for (let i = 0; i < orderModel.count; i++) {
-                            order.push(orderModel.get(i).itemId);
-                        }
-                        iconsPage.cfg_iconOrder = order;
+                ColumnLayout {
+                    spacing: 0
+                    visible: iconsPage.searchFilterText.length === 0
+
+                    ReorderButton {
+                        icon.name: "go-up-symbolic"
+                        enabled: listItem.index > 0
+                        accessibleText: i18nc("@action:button", "Move entry up")
+                        onClicked: iconsPage.moveOrderModelEntry(listItem.index, listItem.index - 1)
+                    }
+
+                    ReorderButton {
+                        icon.name: "go-down-symbolic"
+                        enabled: listItem.index < orderModel.count - 1
+                        accessibleText: i18nc("@action:button", "Move entry down")
+                        onClicked: iconsPage.moveOrderModelEntry(listItem.index, listItem.index + 1)
                     }
                 }
 
