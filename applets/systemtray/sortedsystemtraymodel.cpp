@@ -85,17 +85,11 @@ std::optional<int> SortedSystemTrayModel::compareUserDefinedOrder(const QModelIn
         return std::nullopt;
     }
 
-    int leftIndex = orderIndexForRow(left, order);
-    int rightIndex = orderIndexForRow(right, order);
+    const int leftIndex = orderIndexForRow(left, order);
+    const int rightIndex = orderIndexForRow(right, order);
 
-    if (leftIndex == -1 && rightIndex == -1) {
+    if (leftIndex == -1 || rightIndex == -1) {
         return std::nullopt;
-    }
-    if (leftIndex == -1) {
-        leftIndex = order.size();
-    }
-    if (rightIndex == -1) {
-        rightIndex = order.size();
     }
 
     return leftIndex - rightIndex;
