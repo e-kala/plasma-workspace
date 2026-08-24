@@ -555,7 +555,7 @@ KCMUtils.ScrollViewKCM {
         moveDisplaced: Transition {
             YAnimator {
                 duration: Kirigami.Units.longDuration
-                easing.type: Easing.InOutQuad
+                easing.type: Easing.InOutCubic
             }
         }
 
