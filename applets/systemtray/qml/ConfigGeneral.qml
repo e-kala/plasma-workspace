@@ -536,7 +536,7 @@ KCMUtils.ScrollViewKCM {
         clip: true
 
         model: orderModel
-        reuseItems: true
+        cacheBuffer: contentHeight
 
         headerPositioning: ListView.OverlayHeader
         header: Kirigami.InlineViewHeader {
