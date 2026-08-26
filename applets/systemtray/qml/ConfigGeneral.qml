@@ -247,16 +247,6 @@ KCMUtils.ScrollViewKCM {
         cfg_iconOrder = order;
     }
 
-    function refocusReorderButton(usedButton, otherButton) {
-        Qt.callLater(() => {
-            if (usedButton.enabled) {
-                usedButton.forceActiveFocus();
-            } else {
-                otherButton.forceActiveFocus();
-            }
-        });
-    }
-
     Component.onCompleted: initOrderModel()
 
     function saveConfig() {
@@ -595,6 +585,9 @@ KCMUtils.ScrollViewKCM {
             readonly property var applet: configData ? configData.applet : null
             readonly property var decoration: configData ? configData.decoration : undefined
 
+            readonly property alias keyboardFocusTarget: trayItemDelegate.keyboardFocusTarget
+            readonly property alias lastFocusTarget: trayItemDelegate.lastFocusTarget
+
             readonly property bool matchesFilter: !iconsPage.searchFilterText || displayText.toLowerCase().indexOf(iconsPage.searchFilterText.toLowerCase()) !== -1
             visible: matchesFilter
             width: itemsList.width
@@ -619,23 +612,6 @@ KCMUtils.ScrollViewKCM {
     // Re-add separator line between footer and list view
     extraFooterTopPadding: true
 
-    component ReorderButton: QQC2.ToolButton {
-        id: reorderButton
-
-        required property string accessibleText
-
-        display: QQC2.AbstractButton.IconOnly
-        icon.width: Kirigami.Units.iconSizes.small
-        icon.height: Kirigami.Units.iconSizes.small
-        implicitWidth: Kirigami.Units.iconSizes.small + topPadding + bottomPadding
-        implicitHeight: implicitWidth
-
-        Accessible.name: accessibleText
-        QQC2.ToolTip.text: accessibleText
-        QQC2.ToolTip.visible: hovered
-        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-    }
-
     /*!
     * Delegate representing each system tray item.
     */
@@ -659,50 +635,101 @@ KCMUtils.ScrollViewKCM {
 
         readonly property bool isPlasmoid: itemType === "Plasmoid"
 
+        readonly property alias keyboardFocusTarget: reorderHandle
+
+        readonly property Item lastFocusTarget: {
+            if (configureButton.enabled) {
+                return configureButton;
+            }
+            if (keySequenceItem.visible && keySequenceItem.enabled) {
+                return keySequenceItem;
+            }
+            if (visibilityComboBox.enabled) {
+                return visibilityComboBox;
+            }
+            return reorderHandle;
+        }
+
         contentItem: FocusScope {
             implicitHeight: childrenRect.height
 
-            onActiveFocusChanged: if (activeFocus) {
-                listItem.ListView.view.positionViewAtIndex(listItem.index, ListView.Contain);
+            onActiveFocusChanged: {
+                if (!activeFocus) {
+                    return;
+                }
+                itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
             }
 
             RowLayout {
                 width: parent.width
                 spacing: Kirigami.Units.smallSpacing
 
-                Kirigami.ListItemDragHandle {
-                    listItem: listItem
-                    listView: itemsList
-                    enabled: iconsPage.searchFilterText.length === 0
-                    visible: enabled
+                Item {
+                    id: reorderHandle
 
-                    onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
-                }
-
-                ColumnLayout {
-                    spacing: 0
+                    implicitWidth: dragHandle.implicitWidth
+                    implicitHeight: dragHandle.implicitHeight
                     visible: iconsPage.searchFilterText.length === 0
 
-                    ReorderButton {
-                        id: upButton
-                        icon.name: "go-up-symbolic"
-                        enabled: listItem.index > 0
-                        accessibleText: i18nc("@action:button", "Move entry up")
-                        onClicked: {
-                            iconsPage.moveOrderModelEntry(listItem.index, listItem.index - 1);
-                            iconsPage.refocusReorderButton(upButton, downButton);
+                    activeFocusOnTab: visible
+
+                    Accessible.role: Accessible.Grip
+                    Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1. Use Up and Down arrow keys to move.", listItem.displayText) // qmllint disable unqualified
+                    Accessible.focusable: true
+
+                    function refocusAfterMove() {
+                        reorderHandle.forceActiveFocus();
+                        itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
+                        let attempt = 0;
+                        const tryFocus = () => {
+                            attempt++;
+                            if (!reorderHandle.activeFocus) {
+                                reorderHandle.forceActiveFocus();
+                                itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
+                            }
+                            if (!reorderHandle.activeFocus && attempt < 8) {
+                                Qt.callLater(tryFocus);
+                            }
+                        };
+                        Qt.callLater(tryFocus);
+                    }
+
+                    Keys.onUpPressed: {
+                        iconsPage.moveOrderModelEntry(listItem.index, listItem.index - 1);
+                        reorderHandle.refocusAfterMove();
+                    }
+                    Keys.onDownPressed: {
+                        iconsPage.moveOrderModelEntry(listItem.index, listItem.index + 1);
+                        reorderHandle.refocusAfterMove();
+                    }
+
+                    Keys.onBacktabPressed: event => {
+                        const prev = itemsList.itemAtIndex(listItem.index - 1);
+                        if (prev && prev.lastFocusTarget) {
+                            prev.lastFocusTarget.forceActiveFocus(Qt.BacktabFocusReason);
+                            event.accepted = true;
+                        } else {
+                            event.accepted = false;
                         }
                     }
 
-                    ReorderButton {
-                        id: downButton
-                        icon.name: "go-down-symbolic"
-                        enabled: listItem.index < orderModel.count - 1
-                        accessibleText: i18nc("@action:button", "Move entry down")
-                        onClicked: {
-                            iconsPage.moveOrderModelEntry(listItem.index, listItem.index + 1);
-                            iconsPage.refocusReorderButton(downButton, upButton);
-                        }
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -2
+                        radius: Kirigami.Units.cornerRadius
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Kirigami.Theme.focusColor
+                        visible: reorderHandle.activeFocus
+                    }
+
+                    Kirigami.ListItemDragHandle {
+                        id: dragHandle
+                        anchors.fill: parent
+                        listItem: listItem
+                        listView: itemsList
+
+                        onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
                     }
                 }
 
@@ -745,6 +772,16 @@ KCMUtils.ScrollViewKCM {
                 QQC2.ComboBox {
                     id: visibilityComboBox
 
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -2
+                        radius: Kirigami.Units.cornerRadius
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Kirigami.Theme.focusColor
+                        visible: parent.activeFocus
+                    }
+
                     readonly property string currentVisibility: iconsPage.changedVisibility.has(listItem.itemId) ? iconsPage.changedVisibility.get(listItem.itemId).replace("-sni", "") : originalVisibility
                     readonly property string originalVisibility: {
                         if (iconsPage.cfg_showAllItems || iconsPage.cfg_shownItems.indexOf(listItem.itemId) !== -1) {
@@ -763,6 +800,21 @@ KCMUtils.ScrollViewKCM {
                     enabled: !iconsPage.cfg_showAllItems && listItem.itemId
                     textRole: "text"
                     valueRole: "value"
+
+                    Keys.onTabPressed: event => {
+                        const isLast = !(keySequenceItem.visible && keySequenceItem.enabled) && !configureButton.enabled;
+                        if (!isLast) {
+                            event.accepted = false;
+                            return;
+                        }
+                        const next = itemsList.itemAtIndex(listItem.index + 1);
+                        if (next && next.keyboardFocusTarget) {
+                            next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
+                            event.accepted = true;
+                        } else {
+                            event.accepted = false;
+                        }
+                    }
 
                     currentIndex: {
                         for (let i = 0; i < model.length; i++) {
@@ -793,6 +845,16 @@ KCMUtils.ScrollViewKCM {
                     Layout.minimumWidth: itemsList.keySequenceColumnWidth
                     Layout.preferredWidth: itemsList.keySequenceColumnWidth
 
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -2
+                        radius: Kirigami.Units.cornerRadius
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Kirigami.Theme.focusColor
+                        visible: parent.activeFocus
+                    }
+
                     // We want to keep the column the same size for all items,
                     // but only when not inputting a new shortcut, as the length
                     // of the shortcut may vary quite a bit while inputting. So
@@ -812,6 +874,20 @@ KCMUtils.ScrollViewKCM {
                     enabled: visibilityComboBox.currentValue !== "disabled"
                     readonly property string originalKeySequence: listItem.applet ? listItem.applet.plasmoid.globalShortcut : ""
                     keySequence: iconsPage.changedShortcuts.has(listItem.applet?.plasmoid) ? iconsPage.changedShortcuts.get(listItem.applet?.plasmoid) : originalKeySequence
+
+                    Keys.onTabPressed: event => {
+                        if (configureButton.enabled) {
+                            event.accepted = false;
+                            return;
+                        }
+                        const next = itemsList.itemAtIndex(listItem.index + 1);
+                        if (next && next.keyboardFocusTarget) {
+                            next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
+                            event.accepted = true;
+                        } else {
+                            event.accepted = false;
+                        }
+                    }
 
                     onCaptureFinished: {
                         if (listItem.applet) {
@@ -834,7 +910,19 @@ KCMUtils.ScrollViewKCM {
                 }
 
                 QQC2.Button {
+                    id: configureButton
+
                     readonly property QtObject configureAction: (listItem.applet && listItem.applet.plasmoid.internalAction("configure")) || null
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -2
+                        radius: Kirigami.Units.cornerRadius
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Kirigami.Theme.focusColor
+                        visible: parent.activeFocus
+                    }
 
                     Accessible.name: configureAction ? configureAction.text : ""
                     icon.name: "configure"
@@ -842,6 +930,16 @@ KCMUtils.ScrollViewKCM {
                     // Still reserve layout space, so not setting visible to false
                     opacity: enabled ? 1 : 0
                     onClicked: configureAction.trigger()
+
+                    Keys.onTabPressed: event => {
+                        const next = itemsList.itemAtIndex(listItem.index + 1);
+                        if (next && next.keyboardFocusTarget) {
+                            next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
+                            event.accepted = true;
+                        } else {
+                            event.accepted = false;
+                        }
+                    }
 
                     QQC2.ToolTip {
                         // Strip out ampersands right before non-whitespace characters, i.e.
