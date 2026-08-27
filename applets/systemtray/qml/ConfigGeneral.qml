@@ -115,12 +115,28 @@ KCMUtils.ScrollViewKCM {
 
     function orderModelRowData(modelIndex) {
         return {
+            "isHeader": false,
             "itemId": modelIndex.data(itemIdRole),
             "stableKey": rowStableKey(modelIndex),
             "displayText": modelIndex.data(Qt.DisplayRole),
             "itemType": modelIndex.data(itemTypeRole),
             "category": modelIndex.data(categoryRole),
         };
+    }
+
+    function headerRowData(category) {
+        return {
+            "isHeader": true,
+            "itemId": "",
+            "stableKey": "",
+            "displayText": "",
+            "itemType": "",
+            "category": category,
+        };
+    }
+
+    function isGrouped() {
+        return cfg_iconOrder.length === 0;
     }
 
     function initOrderModel() {
@@ -132,6 +148,9 @@ KCMUtils.ScrollViewKCM {
                 orderModel.append(orderModelRowData(modelIndex));
             }
         }
+        if (isGrouped()) {
+            regroup();
+        }
     }
 
     readonly property var categoryOrder: ["UnknownCategory", "ApplicationStatus", "Communications", "SystemServices", "Hardware"]
@@ -141,42 +160,94 @@ KCMUtils.ScrollViewKCM {
         return index === -1 ? categoryOrder.indexOf("UnknownCategory") : index;
     }
 
-    function restoreDefaultOrder() {
-        const targetOrder = [];
+    property bool bulkReordering: false
+
+    function collectEntryIds() {
+        const order = [];
         for (let i = 0; i < orderModel.count; i++) {
-            const row = orderModel.get(i);
-            targetOrder.push({
-                "itemId": row.itemId,
-                "displayText": row.displayText,
-                "category": row.category,
+            const r = orderModel.get(i);
+            if (!r.isHeader) {
+                order.push(r.itemId);
+            }
+        }
+        return order;
+    }
+
+    function removeSectionHeaders() {
+        for (let i = orderModel.count - 1; i >= 0; i--) {
+            if (orderModel.get(i).isHeader) {
+                orderModel.remove(i);
+            }
+        }
+    }
+
+    function insertSectionHeaders() {
+        let lastCategory = null;
+        for (let i = 0; i < orderModel.count; i++) {
+            const cat = orderModel.get(i).category;
+            if (cat !== lastCategory) {
+                orderModel.insert(i, headerRowData(cat));
+                lastCategory = cat;
+                i++;
+            }
+        }
+    }
+
+    function regroup() {
+        removeSectionHeaders();
+        sortEntriesByCategory();
+        insertSectionHeaders();
+    }
+
+    function sortEntriesByCategory() {
+        const rows = [];
+        for (let i = 0; i < orderModel.count; i++) {
+            const r = orderModel.get(i);
+            rows.push({
+                "stableKey": r.stableKey,
+                "displayText": r.displayText,
+                "category": r.category,
             });
         }
-        targetOrder.sort((a, b) => {
+        rows.sort((a, b) => {
             const categoryDiff = categoryOrderIndex(a.category) - categoryOrderIndex(b.category);
             if (categoryDiff !== 0) {
                 return categoryDiff;
             }
             return a.displayText.localeCompare(b.displayText);
         });
-
-        for (let i = 0; i < targetOrder.length; i++) {
-            let currentIndex = -1;
-            for (let j = i; j < orderModel.count; j++) {
-                if (orderModel.get(j).itemId === targetOrder[i].itemId) {
-                    currentIndex = j;
+        for (let target = 0; target < rows.length; target++) {
+            let cur = -1;
+            for (let j = target; j < orderModel.count; j++) {
+                if (orderModel.get(j).stableKey === rows[target].stableKey) {
+                    cur = j;
                     break;
                 }
             }
-            if (currentIndex !== -1 && currentIndex !== i) {
-                orderModel.move(currentIndex, i, 1);
+            if (cur !== -1 && cur !== target) {
+                orderModel.move(cur, target, 1);
             }
         }
+    }
 
-        cfg_iconOrder = [];
+    function applyOrderMode(grouped) {
+        bulkReordering = true;
+        Qt.callLater(() => {
+            if (grouped) {
+                regroup();
+                cfg_iconOrder = [];
+            } else {
+                removeSectionHeaders();
+                cfg_iconOrder = collectEntryIds();
+            }
+            Qt.callLater(() => { bulkReordering = false; });
+        });
     }
 
     function syncOrderModel() {
         const source = Plasmoid.configSystemTrayModel;
+
+        removeSectionHeaders();
 
         const liveKeys = [];
         for (let i = 0; i < source.rowCount(); i++) {
@@ -219,14 +290,26 @@ KCMUtils.ScrollViewKCM {
             orderModel.insert(insertIndex, orderModelRowData(modelIndex));
             knownKeys.splice(insertIndex, 0, stableKey);
         }
+
+        if (isGrouped()) {
+            sortEntriesByCategory();
+            insertSectionHeaders();
+        }
     }
 
     function refreshOrderModelRow(stableKey) {
         for (let i = 0; i < orderModel.count; i++) {
-            if (orderModel.get(i).stableKey === stableKey) {
+            const r = orderModel.get(i);
+            if (r.isHeader) {
+                continue;
+            }
+            if (r.stableKey === stableKey) {
                 const modelIndex = findConfigModelIndexByStableKey(stableKey);
                 if (modelIndex) {
-                    orderModel.set(i, orderModelRowData(modelIndex));
+                    const newData = orderModelRowData(modelIndex);
+                    const categoryChanged = newData.category !== r.category;
+                    orderModel.set(i, newData);
+                    return categoryChanged ? "category-changed" : true;
                 }
                 return true;
             }
@@ -239,12 +322,18 @@ KCMUtils.ScrollViewKCM {
             return;
         }
         orderModel.move(oldIndex, newIndex, 1);
+        cfg_iconOrder = collectEntryIds();
+    }
 
-        const order = [];
-        for (let i = 0; i < orderModel.count; i++) {
-            order.push(orderModel.get(i).itemId);
+    property bool keyboardReorderNavActive: false
+
+    function updateKeyboardReorderNav() {
+        for (let node = itemsList.Window.activeFocusItem; node; node = node.parent) {
+            if (node === itemsList) {
+                return;
+            }
         }
-        cfg_iconOrder = order;
+        keyboardReorderNavActive = false;
     }
 
     Component.onCompleted: initOrderModel()
@@ -348,17 +437,23 @@ KCMUtils.ScrollViewKCM {
         }
         function onDataChanged(topLeft, bottomRight) {
             let needsSync = false;
+            let categoryChanged = false;
             for (let i = topLeft.row; i <= bottomRight.row; i++) {
                 const modelIndex = Plasmoid.configSystemTrayModel.index(i, 0);
                 if (!modelIndex.data(iconsPage.itemIdRole)) {
                     continue;
                 }
-                if (!iconsPage.refreshOrderModelRow(iconsPage.rowStableKey(modelIndex))) {
+                const result = iconsPage.refreshOrderModelRow(iconsPage.rowStableKey(modelIndex));
+                if (result === false) {
                     needsSync = true;
+                } else if (result === "category-changed") {
+                    categoryChanged = true;
                 }
             }
             if (needsSync) {
                 iconsPage.syncOrderModel();
+            } else if (categoryChanged && iconsPage.isGrouped()) {
+                iconsPage.regroup();
             }
         }
     }
@@ -526,7 +621,7 @@ KCMUtils.ScrollViewKCM {
         clip: true
 
         model: orderModel
-        cacheBuffer: contentHeight
+        cacheBuffer: Math.max(1, count) * Kirigami.Units.gridUnit * 4
 
         headerPositioning: ListView.OverlayHeader
         header: Kirigami.InlineViewHeader {
@@ -557,15 +652,31 @@ KCMUtils.ScrollViewKCM {
                     }
                 },
                 Kirigami.Action {
-                    icon.name: "edit-undo"
-                    text: i18nc("@action:button Reset the manually dragged order of system tray entries back to the automatic, category-based order", "Restore default order") // qmllint disable unqualified
-                    enabled: iconsPage.cfg_iconOrder.length > 0
-                    onTriggered: iconsPage.restoreDefaultOrder()
+                    id: orderModeAction
+
+                    readonly property bool manualOrderEnabled: iconsPage.cfg_iconOrder.length > 0
+
+                    displayComponent: QQC2.ComboBox {
+                        model: [
+                            i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"), // qmllint disable unqualified
+                            i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order") // qmllint disable unqualified
+                        ]
+
+                        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
+
+                        currentIndex: orderModeAction.manualOrderEnabled ? 1 : 0
+
+                        onActivated: index => {
+                            iconsPage.applyOrderMode(index === 0);
+                            currentIndex = Qt.binding(() => orderModeAction.manualOrderEnabled ? 1 : 0);
+                        }
+                    }
                 }
             ]
         }
 
         moveDisplaced: Transition {
+            enabled: !iconsPage.bulkReordering
             YAnimator {
                 duration: Kirigami.Units.longDuration
                 easing.type: Easing.InOutCubic
@@ -575,42 +686,75 @@ KCMUtils.ScrollViewKCM {
         delegate: Item {
             id: delegateRoot
 
+            required property int index
+            required property bool isHeader
             required property string category
             required property string displayText
-            required property int index
             required property string itemId
             required property string itemType
 
-            readonly property var configData: iconsPage.configDataForItemId(itemId)
+            readonly property var configData: isHeader ? null : iconsPage.configDataForItemId(itemId)
             readonly property var applet: configData ? configData.applet : null
             readonly property var decoration: configData ? configData.decoration : undefined
 
-            readonly property alias keyboardFocusTarget: trayItemDelegate.keyboardFocusTarget
-            readonly property alias lastFocusTarget: trayItemDelegate.lastFocusTarget
+            readonly property Item activeItem: isHeader ? headerLoader.item : entryLoader.item
 
-            readonly property bool matchesFilter: !iconsPage.searchFilterText || displayText.toLowerCase().indexOf(iconsPage.searchFilterText.toLowerCase()) !== -1
+            readonly property Item keyboardFocusTarget: entryLoader.item ? entryLoader.item.keyboardFocusTarget : null
+            readonly property Item lastFocusTarget: entryLoader.item ? entryLoader.item.lastFocusTarget : null
+
+            readonly property bool matchesFilter: isHeader || !iconsPage.searchFilterText
+                || displayText.toLowerCase().indexOf(iconsPage.searchFilterText.toLowerCase()) !== -1
             visible: matchesFilter
             width: itemsList.width
-            implicitHeight: trayItemDelegate.implicitHeight
+            implicitHeight: activeItem ? activeItem.implicitHeight : 0
             height: visible ? implicitHeight : 0
 
-            TrayItemDelegate {
-                id: trayItemDelegate
+            Loader {
+                id: headerLoader
+                active: delegateRoot.isHeader
+                width: delegateRoot.width
+                sourceComponent: Component {
+                    Kirigami.ListSectionHeader {
+                        width: headerLoader.width
+                        text: iconsPage.categoryName(delegateRoot.category)
+                    }
+                }
+            }
+
+            Loader {
+                id: entryLoader
+                active: !delegateRoot.isHeader
                 anchors.left: parent.left
                 anchors.right: parent.right
-                applet: delegateRoot.applet
-                category: delegateRoot.category
-                decoration: delegateRoot.decoration
-                displayText: delegateRoot.displayText
-                index: delegateRoot.index
-                itemId: delegateRoot.itemId
-                itemType: delegateRoot.itemType
+                sourceComponent: Component {
+                    TrayItemDelegate {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        applet: delegateRoot.applet
+                        category: delegateRoot.category
+                        decoration: delegateRoot.decoration
+                        displayText: delegateRoot.displayText
+                        index: delegateRoot.index
+                        itemId: delegateRoot.itemId
+                        itemType: delegateRoot.itemType
+                    }
+                }
             }
         }
     }
 
     // Re-add separator line between footer and list view
     extraFooterTopPadding: true
+
+    component FocusRing: Rectangle {
+        anchors.fill: parent
+        anchors.margins: -2
+        radius: Kirigami.Units.cornerRadius
+        color: "transparent"
+        border.width: 2
+        border.color: Kirigami.Theme.focusColor
+        visible: parent.activeFocus
+    }
 
     /*!
     * Delegate representing each system tray item.
@@ -635,7 +779,9 @@ KCMUtils.ScrollViewKCM {
 
         readonly property bool isPlasmoid: itemType === "Plasmoid"
 
-        readonly property alias keyboardFocusTarget: reorderHandle
+        readonly property bool rowTabStopsEnabled: index === 0 || iconsPage.keyboardReorderNavActive
+
+        readonly property alias keyboardFocusTarget: dragHandle
 
         readonly property Item lastFocusTarget: {
             if (configureButton.enabled) {
@@ -647,61 +793,49 @@ KCMUtils.ScrollViewKCM {
             if (visibilityComboBox.enabled) {
                 return visibilityComboBox;
             }
-            return reorderHandle;
+            return dragHandle;
+        }
+
+        function focusNextRowHandle(): bool {
+            const next = itemsList.itemAtIndex(listItem.index + 1);
+            if (next && next.keyboardFocusTarget) {
+                next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
+                return true;
+            }
+            return false;
         }
 
         contentItem: FocusScope {
+            id: focusScope
             implicitHeight: childrenRect.height
 
             onActiveFocusChanged: {
-                if (!activeFocus) {
-                    return;
+                if (activeFocus) {
+                    iconsPage.keyboardReorderNavActive = true;
+                    itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
+                } else {
+                    Qt.callLater(iconsPage.updateKeyboardReorderNav);
                 }
-                itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
             }
 
             RowLayout {
                 width: parent.width
                 spacing: Kirigami.Units.smallSpacing
 
-                Item {
-                    id: reorderHandle
+                Kirigami.ListItemDragHandle {
+                    id: dragHandle
 
-                    implicitWidth: dragHandle.implicitWidth
-                    implicitHeight: dragHandle.implicitHeight
-                    visible: iconsPage.searchFilterText.length === 0
+                    listItem: listItem
+                    listView: itemsList
+                    keyboardReorderingEnabled: true
+                    visible: iconsPage.searchFilterText.length === 0 && iconsPage.cfg_iconOrder.length > 0
 
-                    activeFocusOnTab: visible
+                    activeFocusOnTab: dragHandle.keyboardReorderingEnabled && dragHandle.enabled && dragHandle.visible
+                        && listItem.rowTabStopsEnabled
 
-                    Accessible.role: Accessible.Grip
-                    Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1. Use Up and Down arrow keys to move.", listItem.displayText) // qmllint disable unqualified
-                    Accessible.focusable: true
+                    Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1", listItem.displayText) // qmllint disable unqualified
 
-                    function refocusAfterMove() {
-                        reorderHandle.forceActiveFocus();
-                        itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
-                        let attempt = 0;
-                        const tryFocus = () => {
-                            attempt++;
-                            if (!reorderHandle.activeFocus) {
-                                reorderHandle.forceActiveFocus();
-                                itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
-                            }
-                            if (!reorderHandle.activeFocus && attempt < 8) {
-                                Qt.callLater(tryFocus);
-                            }
-                        };
-                        Qt.callLater(tryFocus);
-                    }
-
-                    Keys.onUpPressed: {
-                        iconsPage.moveOrderModelEntry(listItem.index, listItem.index - 1);
-                        reorderHandle.refocusAfterMove();
-                    }
-                    Keys.onDownPressed: {
-                        iconsPage.moveOrderModelEntry(listItem.index, listItem.index + 1);
-                        reorderHandle.refocusAfterMove();
-                    }
+                    onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
 
                     Keys.onBacktabPressed: event => {
                         const prev = itemsList.itemAtIndex(listItem.index - 1);
@@ -711,25 +845,6 @@ KCMUtils.ScrollViewKCM {
                         } else {
                             event.accepted = false;
                         }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -2
-                        radius: Kirigami.Units.cornerRadius
-                        color: "transparent"
-                        border.width: 2
-                        border.color: Kirigami.Theme.focusColor
-                        visible: reorderHandle.activeFocus
-                    }
-
-                    Kirigami.ListItemDragHandle {
-                        id: dragHandle
-                        anchors.fill: parent
-                        listItem: listItem
-                        listView: itemsList
-
-                        onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
                     }
                 }
 
@@ -757,30 +872,14 @@ KCMUtils.ScrollViewKCM {
                             text: nameLabel.text
                         }
                     }
-
-                    QQC2.Label {
-                        Layout.fillWidth: true
-                        maximumLineCount: 1
-                        text: iconsPage.categoryName(listItem.category)
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        font: Kirigami.Theme.smallFont
-                        color: Kirigami.Theme.disabledTextColor
-                    }
                 }
 
                 QQC2.ComboBox {
                     id: visibilityComboBox
 
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -2
-                        radius: Kirigami.Units.cornerRadius
-                        color: "transparent"
-                        border.width: 2
-                        border.color: Kirigami.Theme.focusColor
-                        visible: parent.activeFocus
-                    }
+                    activeFocusOnTab: listItem.rowTabStopsEnabled
+
+                    FocusRing {}
 
                     readonly property string currentVisibility: iconsPage.changedVisibility.has(listItem.itemId) ? iconsPage.changedVisibility.get(listItem.itemId).replace("-sni", "") : originalVisibility
                     readonly property string originalVisibility: {
@@ -803,17 +902,7 @@ KCMUtils.ScrollViewKCM {
 
                     Keys.onTabPressed: event => {
                         const isLast = !(keySequenceItem.visible && keySequenceItem.enabled) && !configureButton.enabled;
-                        if (!isLast) {
-                            event.accepted = false;
-                            return;
-                        }
-                        const next = itemsList.itemAtIndex(listItem.index + 1);
-                        if (next && next.keyboardFocusTarget) {
-                            next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
-                            event.accepted = true;
-                        } else {
-                            event.accepted = false;
-                        }
+                        event.accepted = isLast && listItem.focusNextRowHandle();
                     }
 
                     currentIndex: {
@@ -845,15 +934,7 @@ KCMUtils.ScrollViewKCM {
                     Layout.minimumWidth: itemsList.keySequenceColumnWidth
                     Layout.preferredWidth: itemsList.keySequenceColumnWidth
 
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -2
-                        radius: Kirigami.Units.cornerRadius
-                        color: "transparent"
-                        border.width: 2
-                        border.color: Kirigami.Theme.focusColor
-                        visible: parent.activeFocus
-                    }
+                    FocusRing {}
 
                     // We want to keep the column the same size for all items,
                     // but only when not inputting a new shortcut, as the length
@@ -868,7 +949,14 @@ KCMUtils.ScrollViewKCM {
 
                     // Delay this one tick to make sure the item has finished
                     // any layout that still needs to be done.
-                    Component.onCompleted: Qt.callLater(updateColumnWidth)
+                    Component.onCompleted: {
+                        Qt.callLater(updateColumnWidth);
+                        for (let i = 0; i < children.length; ++i) {
+                            if ("checkable" in children[i]) {
+                                children[i].activeFocusOnTab = Qt.binding(() => listItem.rowTabStopsEnabled);
+                            }
+                        }
+                    }
 
                     visible: listItem.isPlasmoid
                     enabled: visibilityComboBox.currentValue !== "disabled"
@@ -876,17 +964,7 @@ KCMUtils.ScrollViewKCM {
                     keySequence: iconsPage.changedShortcuts.has(listItem.applet?.plasmoid) ? iconsPage.changedShortcuts.get(listItem.applet?.plasmoid) : originalKeySequence
 
                     Keys.onTabPressed: event => {
-                        if (configureButton.enabled) {
-                            event.accepted = false;
-                            return;
-                        }
-                        const next = itemsList.itemAtIndex(listItem.index + 1);
-                        if (next && next.keyboardFocusTarget) {
-                            next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
-                            event.accepted = true;
-                        } else {
-                            event.accepted = false;
-                        }
+                        event.accepted = !configureButton.enabled && listItem.focusNextRowHandle();
                     }
 
                     onCaptureFinished: {
@@ -914,15 +992,9 @@ KCMUtils.ScrollViewKCM {
 
                     readonly property QtObject configureAction: (listItem.applet && listItem.applet.plasmoid.internalAction("configure")) || null
 
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -2
-                        radius: Kirigami.Units.cornerRadius
-                        color: "transparent"
-                        border.width: 2
-                        border.color: Kirigami.Theme.focusColor
-                        visible: parent.activeFocus
-                    }
+                    activeFocusOnTab: listItem.rowTabStopsEnabled
+
+                    FocusRing {}
 
                     Accessible.name: configureAction ? configureAction.text : ""
                     icon.name: "configure"
@@ -932,13 +1004,7 @@ KCMUtils.ScrollViewKCM {
                     onClicked: configureAction.trigger()
 
                     Keys.onTabPressed: event => {
-                        const next = itemsList.itemAtIndex(listItem.index + 1);
-                        if (next && next.keyboardFocusTarget) {
-                            next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
-                            event.accepted = true;
-                        } else {
-                            event.accepted = false;
-                        }
+                        event.accepted = listItem.focusNextRowHandle();
                     }
 
                     QQC2.ToolTip {
