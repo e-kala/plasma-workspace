@@ -6,6 +6,7 @@
     SPDX-FileCopyrightText: 2025 Kristen McWilliam <kristen@kde.org>
     SPDX-FileCopyrightText: 2025 Nate Graham <nate@kde.org>
     SPDX-FileCopyrightText: 2026 Nathaniel Krebs <areyoufeelingitnowmrkrebs@gmail.com>
+    SPDX-FileCopyrightText: 2026 Ramil Nurmanov <ramil2004nur@gmail.com>
 
     SPDX-License-Identifier: GPL-2.0-or-later
 */
@@ -137,6 +138,23 @@ KCMUtils.ScrollViewKCM {
 
     function isGrouped() {
         return cfg_iconOrder.length === 0;
+    }
+
+    function focusDialogFooter(): bool {
+        for (let p = iconsPage.parent; p; p = p.parent) {
+            const row = p.footer?.contentItem ?? null;
+            if (!row || row.children === undefined) {
+                continue;
+            }
+            for (const button of row.children) {
+                if (String(button.icon?.name ?? "").startsWith("dialog-")
+                        && button.visible && button.enabled) {
+                    button.forceActiveFocus(Qt.TabFocusReason);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     function initOrderModel() {
@@ -323,17 +341,6 @@ KCMUtils.ScrollViewKCM {
         }
         orderModel.move(oldIndex, newIndex, 1);
         cfg_iconOrder = collectEntryIds();
-    }
-
-    property bool keyboardReorderNavActive: false
-
-    function updateKeyboardReorderNav() {
-        for (let node = itemsList.Window.activeFocusItem; node; node = node.parent) {
-            if (node === itemsList) {
-                return;
-            }
-        }
-        keyboardReorderNavActive = false;
     }
 
     Component.onCompleted: initOrderModel()
@@ -610,6 +617,62 @@ KCMUtils.ScrollViewKCM {
                 font: Kirigami.Theme.smallFont
             }
         }
+
+        Kirigami.Separator {
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.smallSpacing
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Heading {
+                text: i18nc("@title:group system tray entries", "Entries")
+                level: 3
+                elide: Text.ElideRight
+            }
+
+            Kirigami.SearchField {
+                id: searchField
+                Layout.fillWidth: true
+                onTextChanged: {
+                    // reset currentIndex to avoid passing focus to the currentItem when
+                    // the model updates
+                    itemsList.currentIndex = -1;
+                    iconsPage.searchFilterText = text;
+                }
+            }
+
+            QQC2.CheckBox {
+                id: showAllCheckBox
+                text: i18nc("@option:check, This is referring to system tray entries", "Always show all")
+                checked: iconsPage.cfg_showAllItems
+                onToggled: iconsPage.cfg_showAllItems = checked
+            }
+
+            QQC2.ComboBox {
+                id: orderModeComboBox
+
+                KeyNavigation.tab: itemsList
+
+                readonly property bool manualOrderEnabled: iconsPage.cfg_iconOrder.length > 0
+
+                model: [
+                    i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"), // qmllint disable unqualified
+                    i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order") // qmllint disable unqualified
+                ]
+
+                implicitContentWidthPolicy: QQC2.ComboBox.WidestText
+
+                currentIndex: manualOrderEnabled ? 1 : 0
+
+                onActivated: index => {
+                    iconsPage.applyOrderMode(index === 0);
+                    currentIndex = Qt.binding(() => orderModeComboBox.manualOrderEnabled ? 1 : 0);
+                }
+            }
+        }
     }
 
     view: ListView {
@@ -623,56 +686,102 @@ KCMUtils.ScrollViewKCM {
         model: orderModel
         cacheBuffer: Math.max(1, count) * Kirigami.Units.gridUnit * 4
 
-        headerPositioning: ListView.OverlayHeader
-        header: Kirigami.InlineViewHeader {
-            width: itemsList.width
-            text: i18nc("@title:column", "Entries")
-            actions: [
-                Kirigami.Action {
-                    id: showAllCheckBox
-                    text: i18nc("@option:check, This is referring to system tray entries", "Always show all")
-                    onToggled: iconsPage.cfg_showAllItems = checked
-                    checked: iconsPage.cfg_showAllItems
-                    displayComponent: QQC2.CheckBox {
-                        horizontalPadding: Kirigami.Units.largeSpacing
-                        text: showAllCheckBox.text
-                        checked: showAllCheckBox.checked
-                        onToggled: showAllCheckBox.toggle()
-                    }
-                },
-                Kirigami.Action {
-                    id: searchAction
-                    displayComponent: Kirigami.SearchField {
-                        onTextChanged: {
-                            // reset currentIndex to avoid passing focus to the currentItem when
-                            // the model updates
-                            itemsList.currentIndex = -1
-                            iconsPage.searchFilterText = text
-                        }
-                    }
-                },
-                Kirigami.Action {
-                    id: orderModeAction
+        activeFocusOnTab: false
+        KeyNavigation.backtab: orderModeComboBox
+        keyNavigationEnabled: false
 
-                    readonly property bool manualOrderEnabled: iconsPage.cfg_iconOrder.length > 0
+        function navRowCells(row: int): var {
+            const item = itemAtIndex(row);
+            return (item && item.visible && item.focusables) ? item.focusables : [];
+        }
 
-                    displayComponent: QQC2.ComboBox {
-                        model: [
-                            i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"), // qmllint disable unqualified
-                            i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order") // qmllint disable unqualified
-                        ]
+        function navCurrentRow(): int {
+            for (let node = itemsList.Window.activeFocusItem; node && node !== contentItem; node = node.parent) {
+                if (node.parent === contentItem && node.focusables !== undefined) {
+                    return node.index;
+                }
+            }
+            return -1;
+        }
 
-                        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
-
-                        currentIndex: orderModeAction.manualOrderEnabled ? 1 : 0
-
-                        onActivated: index => {
-                            iconsPage.applyOrderMode(index === 0);
-                            currentIndex = Qt.binding(() => orderModeAction.manualOrderEnabled ? 1 : 0);
-                        }
+        function navColumnIn(cells): int {
+            const focusItem = itemsList.Window.activeFocusItem;
+            for (let i = 0; i < cells.length; ++i) {
+                for (let node = focusItem; node; node = node.parent) {
+                    if (node === cells[i]) {
+                        return i;
                     }
                 }
-            ]
+            }
+            return -1;
+        }
+
+        function navFocusCell(row: int, column: int): void {
+            const cells = navRowCells(row);
+            currentIndex = row;
+            positionViewAtIndex(row, ListView.Contain);
+            cells[Math.max(0, Math.min(column, cells.length - 1))].forceActiveFocus(Qt.OtherFocusReason);
+        }
+
+        function navFocusEdge(first: bool): void {
+            const dir = first ? 1 : -1;
+            for (let r = first ? 0 : count - 1; r >= 0 && r < count; r += dir) {
+                if (navRowCells(r).length > 0) {
+                    navFocusCell(r, first ? 0 : navRowCells(r).length - 1);
+                    return;
+                }
+            }
+        }
+
+        function navStep(forward: bool): bool {
+            const dir = forward ? 1 : -1;
+            const row = navCurrentRow();
+            if (row < 0) {
+                navFocusEdge(forward);
+                return true;
+            }
+            const cells = navRowCells(row);
+            const column = navColumnIn(cells);
+            if (column + dir >= 0 && column + dir < cells.length) {
+                navFocusCell(row, column + dir);
+                return true;
+            }
+            for (let r = row + dir; r >= 0 && r < count; r += dir) {
+                const next = navRowCells(r);
+                if (next.length > 0) {
+                    navFocusCell(r, forward ? 0 : next.length - 1);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Keys.onTabPressed: event => {
+            event.accepted = navStep(true) || iconsPage.focusDialogFooter();
+        }
+        Keys.onBacktabPressed: event => {
+            event.accepted = navStep(false);
+        }
+        Keys.onPressed: event => {
+            const mirrored = itemsList.LayoutMirroring.enabled;
+            if (event.key === Qt.Key_Left) {
+                navStep(mirrored);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Right) {
+                navStep(!mirrored);
+                event.accepted = true;
+            }
+        }
+
+        onActiveFocusChanged: {
+            if (!activeFocus) {
+                return;
+            }
+            if (focusReason === Qt.TabFocusReason) {
+                navFocusEdge(true);
+            } else if (focusReason === Qt.BacktabFocusReason) {
+                navFocusEdge(false);
+            }
         }
 
         moveDisplaced: Transition {
@@ -699,8 +808,7 @@ KCMUtils.ScrollViewKCM {
 
             readonly property Item activeItem: isHeader ? headerLoader.item : entryLoader.item
 
-            readonly property Item keyboardFocusTarget: entryLoader.item ? entryLoader.item.keyboardFocusTarget : null
-            readonly property Item lastFocusTarget: entryLoader.item ? entryLoader.item.lastFocusTarget : null
+            readonly property var focusables: entryLoader.item ? entryLoader.item.focusables : []
 
             readonly property bool matchesFilter: isHeader || !iconsPage.searchFilterText
                 || displayText.toLowerCase().indexOf(iconsPage.searchFilterText.toLowerCase()) !== -1
@@ -779,43 +887,29 @@ KCMUtils.ScrollViewKCM {
 
         readonly property bool isPlasmoid: itemType === "Plasmoid"
 
-        readonly property bool rowTabStopsEnabled: index === 0 || iconsPage.keyboardReorderNavActive
-
-        readonly property alias keyboardFocusTarget: dragHandle
-
-        readonly property Item lastFocusTarget: {
-            if (configureButton.enabled) {
-                return configureButton;
-            }
-            if (keySequenceItem.visible && keySequenceItem.enabled) {
-                return keySequenceItem;
+        readonly property var focusables: {
+            const list = [];
+            if (dragHandle.visible) {
+                list.push(dragHandle);
             }
             if (visibilityComboBox.enabled) {
-                return visibilityComboBox;
+                list.push(visibilityComboBox);
             }
-            return dragHandle;
-        }
-
-        function focusNextRowHandle(): bool {
-            const next = itemsList.itemAtIndex(listItem.index + 1);
-            if (next && next.keyboardFocusTarget) {
-                next.keyboardFocusTarget.forceActiveFocus(Qt.TabFocusReason);
-                return true;
+            if (keySequenceItem.visible && keySequenceItem.enabled) {
+                list.push(keySequenceItem);
             }
-            return false;
+            if (configureButton.enabled) {
+                list.push(configureButton);
+            }
+            return list;
         }
 
         contentItem: FocusScope {
-            id: focusScope
             implicitHeight: childrenRect.height
 
-            onActiveFocusChanged: {
-                if (activeFocus) {
-                    iconsPage.keyboardReorderNavActive = true;
-                    itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
-                } else {
-                    Qt.callLater(iconsPage.updateKeyboardReorderNav);
-                }
+            onActiveFocusChanged: if (activeFocus) {
+                itemsList.currentIndex = listItem.index;
+                itemsList.positionViewAtIndex(listItem.index, ListView.Contain);
             }
 
             RowLayout {
@@ -827,25 +921,13 @@ KCMUtils.ScrollViewKCM {
 
                     listItem: listItem
                     listView: itemsList
-                    keyboardReorderingEnabled: true
                     visible: iconsPage.searchFilterText.length === 0 && iconsPage.cfg_iconOrder.length > 0
 
-                    activeFocusOnTab: dragHandle.keyboardReorderingEnabled && dragHandle.enabled && dragHandle.visible
-                        && listItem.rowTabStopsEnabled
+                    activeFocusOnTab: false
 
                     Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1", listItem.displayText) // qmllint disable unqualified
 
                     onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
-
-                    Keys.onBacktabPressed: event => {
-                        const prev = itemsList.itemAtIndex(listItem.index - 1);
-                        if (prev && prev.lastFocusTarget) {
-                            prev.lastFocusTarget.forceActiveFocus(Qt.BacktabFocusReason);
-                            event.accepted = true;
-                        } else {
-                            event.accepted = false;
-                        }
-                    }
                 }
 
                 Kirigami.Icon {
@@ -877,7 +959,7 @@ KCMUtils.ScrollViewKCM {
                 QQC2.ComboBox {
                     id: visibilityComboBox
 
-                    activeFocusOnTab: listItem.rowTabStopsEnabled
+                    activeFocusOnTab: false
 
                     FocusRing {}
 
@@ -899,11 +981,6 @@ KCMUtils.ScrollViewKCM {
                     enabled: !iconsPage.cfg_showAllItems && listItem.itemId
                     textRole: "text"
                     valueRole: "value"
-
-                    Keys.onTabPressed: event => {
-                        const isLast = !(keySequenceItem.visible && keySequenceItem.enabled) && !configureButton.enabled;
-                        event.accepted = isLast && listItem.focusNextRowHandle();
-                    }
 
                     currentIndex: {
                         for (let i = 0; i < model.length; i++) {
@@ -934,7 +1011,50 @@ KCMUtils.ScrollViewKCM {
                     Layout.minimumWidth: itemsList.keySequenceColumnWidth
                     Layout.preferredWidth: itemsList.keySequenceColumnWidth
 
-                    FocusRing {}
+                    readonly property Item recordButton: keySequenceItem.children[0] ?? keySequenceItem
+                    readonly property bool recording: recordButton.checked ?? false
+
+                    Rectangle {
+                        parent: keySequenceItem.recordButton
+                        anchors.fill: parent
+                        anchors.margins: -2
+                        radius: Kirigami.Units.cornerRadius
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Kirigami.Theme.focusColor
+                        visible: keySequenceItem.activeFocus
+                    }
+
+                    Keys.onPressed: event => {
+                        if (keySequenceItem.recording) {
+                            return;
+                        }
+                        const mirrored = itemsList.LayoutMirroring.enabled;
+                        switch (event.key) {
+                        case Qt.Key_Space:
+                        case Qt.Key_Return:
+                        case Qt.Key_Enter:
+                            keySequenceItem.startCapturing();
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Left:
+                            itemsList.navStep(mirrored);
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Right:
+                            itemsList.navStep(!mirrored);
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Tab:
+                            event.accepted = itemsList.navStep(!(event.modifiers & Qt.ShiftModifier));
+                            break;
+                        case Qt.Key_Backtab:
+                            event.accepted = itemsList.navStep(false);
+                            break;
+                        }
+                    }
+
+                    onKeySequenceChanged: if (!recording) dropInnerTabStops(keySequenceItem)
 
                     // We want to keep the column the same size for all items,
                     // but only when not inputting a new shortcut, as the length
@@ -951,10 +1071,16 @@ KCMUtils.ScrollViewKCM {
                     // any layout that still needs to be done.
                     Component.onCompleted: {
                         Qt.callLater(updateColumnWidth);
-                        for (let i = 0; i < children.length; ++i) {
-                            if ("checkable" in children[i]) {
-                                children[i].activeFocusOnTab = Qt.binding(() => listItem.rowTabStopsEnabled);
+                        dropInnerTabStops(keySequenceItem);
+                    }
+
+                    function dropInnerTabStops(item) {
+                        for (let i = 0; i < item.children.length; ++i) {
+                            const child = item.children[i];
+                            if ("activeFocusOnTab" in child) {
+                                child.activeFocusOnTab = false;
                             }
+                            dropInnerTabStops(child);
                         }
                     }
 
@@ -962,10 +1088,6 @@ KCMUtils.ScrollViewKCM {
                     enabled: visibilityComboBox.currentValue !== "disabled"
                     readonly property string originalKeySequence: listItem.applet ? listItem.applet.plasmoid.globalShortcut : ""
                     keySequence: iconsPage.changedShortcuts.has(listItem.applet?.plasmoid) ? iconsPage.changedShortcuts.get(listItem.applet?.plasmoid) : originalKeySequence
-
-                    Keys.onTabPressed: event => {
-                        event.accepted = !configureButton.enabled && listItem.focusNextRowHandle();
-                    }
 
                     onCaptureFinished: {
                         if (listItem.applet) {
@@ -992,7 +1114,7 @@ KCMUtils.ScrollViewKCM {
 
                     readonly property QtObject configureAction: (listItem.applet && listItem.applet.plasmoid.internalAction("configure")) || null
 
-                    activeFocusOnTab: listItem.rowTabStopsEnabled
+                    activeFocusOnTab: false
 
                     FocusRing {}
 
@@ -1002,10 +1124,6 @@ KCMUtils.ScrollViewKCM {
                     // Still reserve layout space, so not setting visible to false
                     opacity: enabled ? 1 : 0
                     onClicked: configureAction.trigger()
-
-                    Keys.onTabPressed: event => {
-                        event.accepted = listItem.focusNextRowHandle();
-                    }
 
                     QQC2.ToolTip {
                         // Strip out ampersands right before non-whitespace characters, i.e.
