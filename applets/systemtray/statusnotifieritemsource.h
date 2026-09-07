@@ -30,6 +30,8 @@ public:
     void contextMenu(int x, int y);
     void provideXdgActivationToken(const QString &token);
 
+    bool isValid() const;
+
     QIcon attentionIcon() const;
     QString attentionIconName() const;
     QString attentionMovieName() const;

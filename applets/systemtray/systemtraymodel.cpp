@@ -422,15 +422,23 @@ QHash<int, QByteArray> StatusNotifierModel::roleNames() const
 
 void StatusNotifierModel::addSource(const QString &source)
 {
-    int count = rowCount();
-    beginInsertRows(QModelIndex(), count, count);
-
     StatusNotifierItemSource *sni = m_sniHost->itemForService(source);
     connect(sni, &StatusNotifierItemSource::dataUpdated, this, [=, this]() {
         dataUpdated(source);
     });
-    m_items.append(source);
-    endInsertRows();
+
+    auto insertRow = [this, source]() {
+        int count = rowCount();
+        beginInsertRows(QModelIndex(), count, count);
+        m_items.append(source);
+        endInsertRows();
+    };
+
+    if (!sni->isValid() || !sni->id().isEmpty()) {
+        insertRow();
+    } else {
+        connect(sni, &StatusNotifierItemSource::dataUpdated, this, insertRow, Qt::SingleShotConnection);
+    }
 }
 
 void StatusNotifierModel::removeSource(const QString &source)

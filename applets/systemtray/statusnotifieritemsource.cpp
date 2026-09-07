@@ -159,6 +159,11 @@ QString StatusNotifierItemSource::category() const
     return m_category;
 }
 
+bool StatusNotifierItemSource::isValid() const
+{
+    return m_valid;
+}
+
 QIcon StatusNotifierItemSource::icon() const
 {
     return m_icon;
