@@ -784,9 +784,18 @@ KCMUtils.ScrollViewKCM {
             }
         }
 
+        move: Transition {
+            enabled: !iconsPage.bulkReordering
+            NumberAnimation {
+                property: "y"
+                duration: Kirigami.Units.longDuration
+                easing.type: Easing.InOutCubic
+            }
+        }
         moveDisplaced: Transition {
             enabled: !iconsPage.bulkReordering
-            YAnimator {
+            NumberAnimation {
+                property: "y"
                 duration: Kirigami.Units.longDuration
                 easing.type: Easing.InOutCubic
             }
