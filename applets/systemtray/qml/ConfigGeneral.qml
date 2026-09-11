@@ -720,7 +720,7 @@ KCMUtils.ScrollViewKCM {
             const cells = navRowCells(row);
             currentIndex = row;
             positionViewAtIndex(row, ListView.Contain);
-            cells[Math.max(0, Math.min(column, cells.length - 1))].forceActiveFocus(Qt.OtherFocusReason);
+            cells[Math.max(0, Math.min(column, cells.length - 1))].forceActiveFocus(Qt.TabFocusReason);
         }
 
         function navFocusEdge(first: bool): void {
@@ -863,16 +863,6 @@ KCMUtils.ScrollViewKCM {
     // Re-add separator line between footer and list view
     extraFooterTopPadding: true
 
-    component FocusRing: Rectangle {
-        anchors.fill: parent
-        anchors.margins: -2
-        radius: Kirigami.Units.cornerRadius
-        color: "transparent"
-        border.width: 2
-        border.color: Kirigami.Theme.focusColor
-        visible: parent.activeFocus
-    }
-
     /*!
     * Delegate representing each system tray item.
     */
@@ -969,8 +959,6 @@ KCMUtils.ScrollViewKCM {
                     id: visibilityComboBox
 
                     activeFocusOnTab: false
-
-                    FocusRing {}
 
                     readonly property string currentVisibility: iconsPage.changedVisibility.has(listItem.itemId) ? iconsPage.changedVisibility.get(listItem.itemId).replace("-sni", "") : originalVisibility
                     readonly property string originalVisibility: {
@@ -1124,8 +1112,6 @@ KCMUtils.ScrollViewKCM {
                     readonly property QtObject configureAction: (listItem.applet && listItem.applet.plasmoid.internalAction("configure")) || null
 
                     activeFocusOnTab: false
-
-                    FocusRing {}
 
                     Accessible.name: configureAction ? configureAction.text : ""
                     icon.name: "configure"
