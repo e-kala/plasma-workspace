@@ -659,8 +659,8 @@ KCMUtils.ScrollViewKCM {
                 readonly property bool manualOrderEnabled: iconsPage.cfg_iconOrder.length > 0
 
                 model: [
-                    i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"), // qmllint disable unqualified
-                    i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order") // qmllint disable unqualified
+                    i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"),
+                    i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order")
                 ]
 
                 implicitContentWidthPolicy: QQC2.ComboBox.WidestText
@@ -924,7 +924,7 @@ KCMUtils.ScrollViewKCM {
 
                     activeFocusOnTab: false
 
-                    Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1", listItem.displayText) // qmllint disable unqualified
+                    Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1", listItem.displayText)
 
                     onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
                 }
