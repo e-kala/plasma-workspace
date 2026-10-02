@@ -592,58 +592,6 @@ void SystemTray::scroll(const QString &service, int delta, const QString &direct
     source->scroll(delta, direction);
 }
 
-QStringList SystemTray::materializeOrderWithMove(const QString &itemId, const QString &beforeItemId)
-{
-    if (itemId.isEmpty() || itemId == beforeItemId) {
-        return {};
-    }
-
-    QAbstractItemModel *model = configSystemTrayModel();
-    QStringList order;
-    order.reserve(model->rowCount());
-    for (int i = 0; i < model->rowCount(); ++i) {
-        const QString id = model->index(i, 0).data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
-        if (!id.isEmpty()) {
-            order << id;
-        }
-    }
-
-    if (!order.contains(itemId)) {
-        qCWarning(SYSTEM_TRAY) << "materializeOrderWithMove: unknown item id" << itemId;
-        return {};
-    }
-
-    order.removeAll(itemId);
-    int insertIndex = beforeItemId.isEmpty() ? -1 : order.indexOf(beforeItemId);
-    if (insertIndex < 0) {
-        insertIndex = order.size();
-    }
-    order.insert(insertIndex, itemId);
-
-    return order;
-}
-
-void SystemTray::moveItem(const QString &itemId, const QString &beforeItemId)
-{
-    if (!m_settings) {
-        return;
-    }
-
-    const QStringList order = materializeOrderWithMove(itemId, beforeItemId);
-    if (order.isEmpty()) {
-        return;
-    }
-
-    m_settings->setItemOrder(order);
-}
-
-void SystemTray::resetItemOrder()
-{
-    if (m_settings) {
-        m_settings->setItemOrder({});
-    }
-}
-
 K_PLUGIN_CLASS_WITH_JSON(SystemTray, "metadata.json")
 
 #include "systemtray.moc"

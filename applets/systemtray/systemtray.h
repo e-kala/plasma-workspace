@@ -78,10 +78,6 @@ public:
 
     Q_INVOKABLE void scroll(const QString &service, int delta, const QString &direction);
 
-    Q_INVOKABLE void moveItem(const QString &itemId, const QString &beforeItemId);
-
-    Q_INVOKABLE void resetItemOrder();
-
 private Q_SLOTS:
     // synchronizes with configuration and deletes not allowed applets
     void onEnabledAppletsChanged();
@@ -95,7 +91,6 @@ private:
     SystemTrayModel *systemTrayModel();
     void initSettingsAndRegistry();
     void initRegistry();
-    QStringList materializeOrderWithMove(const QString &itemId, const QString &beforeItemId);
 
     KConfigWatcher::Ptr m_configWatcher;
     bool m_xwaylandClientsScale = true;
