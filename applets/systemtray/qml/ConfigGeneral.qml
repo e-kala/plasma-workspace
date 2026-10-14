@@ -136,9 +136,7 @@ KCMUtils.ScrollViewKCM {
         };
     }
 
-    function isGrouped() {
-        return cfg_iconOrder.length === 0;
-    }
+    readonly property bool isGrouped: cfg_iconOrder.length === 0
 
     function focusDialogFooter(): bool {
         for (let p = iconsPage.parent; p; p = p.parent) {
@@ -166,7 +164,7 @@ KCMUtils.ScrollViewKCM {
                 orderModel.append(orderModelRowData(modelIndex));
             }
         }
-        if (isGrouped()) {
+        if (isGrouped) {
             regroup();
         }
     }
@@ -309,7 +307,7 @@ KCMUtils.ScrollViewKCM {
             knownKeys.splice(insertIndex, 0, stableKey);
         }
 
-        if (isGrouped()) {
+        if (isGrouped) {
             sortEntriesByCategory();
             insertSectionHeaders();
         }
@@ -459,7 +457,7 @@ KCMUtils.ScrollViewKCM {
             }
             if (needsSync) {
                 iconsPage.syncOrderModel();
-            } else if (categoryChanged && iconsPage.isGrouped()) {
+            } else if (categoryChanged && iconsPage.isGrouped) {
                 iconsPage.regroup();
             }
         }
@@ -656,8 +654,6 @@ KCMUtils.ScrollViewKCM {
 
                 KeyNavigation.tab: itemsList
 
-                readonly property bool manualOrderEnabled: iconsPage.cfg_iconOrder.length > 0
-
                 model: [
                     i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"),
                     i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order")
@@ -665,11 +661,11 @@ KCMUtils.ScrollViewKCM {
 
                 implicitContentWidthPolicy: QQC2.ComboBox.WidestText
 
-                currentIndex: manualOrderEnabled ? 1 : 0
+                currentIndex: iconsPage.isGrouped ? 0 : 1
 
                 onActivated: index => {
                     iconsPage.applyOrderMode(index === 0);
-                    currentIndex = Qt.binding(() => orderModeComboBox.manualOrderEnabled ? 1 : 0);
+                    currentIndex = Qt.binding(() => iconsPage.isGrouped ? 0 : 1);
                 }
             }
         }
@@ -920,7 +916,7 @@ KCMUtils.ScrollViewKCM {
 
                     listItem: listItem
                     listView: itemsList
-                    visible: iconsPage.searchFilterText.length === 0 && iconsPage.cfg_iconOrder.length > 0
+                    visible: iconsPage.searchFilterText.length === 0 && !iconsPage.isGrouped
 
                     activeFocusOnTab: false
 
