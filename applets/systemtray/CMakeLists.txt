@@ -11,6 +11,7 @@ set(systemtray_SRCS
     systemtraytypes.cpp
     systemtraymodel.cpp
     sortedsystemtraymodel.cpp sortedsystemtraymodel.h
+    systemtrayconfigmodel.cpp systemtrayconfigmodel.h
 )
 
 qt_add_dbus_interface(systemtray_SRCS ${KSTATUSNOTIFIERITEM_DBUS_INTERFACES_DIR}/kf6_org.kde.StatusNotifierWatcher.xml statusnotifierwatcher_interface)

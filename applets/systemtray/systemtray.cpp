@@ -14,6 +14,7 @@
 #include "sortedsystemtraymodel.h"
 #include "statusnotifieritemhost.h"
 #include "statusnotifieritemsource.h"
+#include "systemtrayconfigmodel.h"
 #include "systemtraymodel.h"
 #include "systemtraysettings.h"
 
@@ -397,7 +398,7 @@ SystemTrayModel *SystemTray::systemTrayModel()
 QAbstractItemModel *SystemTray::sortedSystemTrayModel()
 {
     if (!m_sortedSystemTrayModel) {
-        m_sortedSystemTrayModel = new SortedSystemTrayModel(SortedSystemTrayModel::SortingType::SystemTray, this, m_settings);
+        m_sortedSystemTrayModel = new SortedSystemTrayModel(m_settings, this);
         m_sortedSystemTrayModel->setSourceModel(systemTrayModel());
     }
     return m_sortedSystemTrayModel;
@@ -406,8 +407,7 @@ QAbstractItemModel *SystemTray::sortedSystemTrayModel()
 QAbstractItemModel *SystemTray::configSystemTrayModel()
 {
     if (!m_configSystemTrayModel) {
-        m_configSystemTrayModel = new SortedSystemTrayModel(SortedSystemTrayModel::SortingType::ConfigurationPage, this, m_settings);
-        m_configSystemTrayModel->setSourceModel(systemTrayModel());
+        m_configSystemTrayModel = new SystemTrayConfigModel(systemTrayModel(), this);
     }
     return m_configSystemTrayModel;
 }

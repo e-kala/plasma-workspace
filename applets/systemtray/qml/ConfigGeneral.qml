@@ -66,77 +66,30 @@ KCMUtils.ScrollViewKCM {
     readonly property var changedShortcuts: new Map()
     readonly property var changedVisibility: new Map()
 
-    ListModel {
-        id: orderModel
-    }
-
-    readonly property int itemTypeRole: Qt.UserRole + 1
-    readonly property int itemIdRole: Qt.UserRole + 2
-    readonly property int categoryRole: Qt.UserRole + 4
-    readonly property int appletRole: Qt.UserRole + 8
-    readonly property int dataEngineSourceRole: Qt.UserRole + 107
-
-    function rowStableKey(modelIndex) {
-        const source = modelIndex.data(dataEngineSourceRole);
-        return source ? modelIndex.data(itemIdRole) + " " + source : modelIndex.data(itemIdRole);
-    }
-
-    function findConfigModelIndexByStableKey(stableKey) {
-        const source = Plasmoid.configSystemTrayModel;
-        for (let i = 0; i < source.rowCount(); i++) {
-            const modelIndex = source.index(i, 0);
-            if (rowStableKey(modelIndex) === stableKey) {
-                return modelIndex;
-            }
-        }
-        return null;
-    }
-
-    function findConfigModelIndex(itemId) {
-        const source = Plasmoid.configSystemTrayModel;
-        for (let i = 0; i < source.rowCount(); i++) {
-            const modelIndex = source.index(i, 0);
-            if (modelIndex.data(itemIdRole) === itemId) {
-                return modelIndex;
-            }
-        }
-        return null;
-    }
-
-    function configDataForItemId(itemId) {
-        const modelIndex = findConfigModelIndex(itemId);
-        if (!modelIndex) {
-            return null;
-        }
-        return {
-            "applet": modelIndex.data(appletRole),
-            "decoration": modelIndex.data(Qt.DecorationRole),
-        };
-    }
-
-    function orderModelRowData(modelIndex) {
-        return {
-            "isHeader": false,
-            "itemId": modelIndex.data(itemIdRole),
-            "stableKey": rowStableKey(modelIndex),
-            "displayText": modelIndex.data(Qt.DisplayRole),
-            "itemType": modelIndex.data(itemTypeRole),
-            "category": modelIndex.data(categoryRole),
-        };
-    }
-
-    function headerRowData(category) {
-        return {
-            "isHeader": true,
-            "itemId": "",
-            "stableKey": "",
-            "displayText": "",
-            "itemType": "",
-            "category": category,
-        };
-    }
-
+    readonly property var configModel: Plasmoid.configSystemTrayModel
     readonly property bool isGrouped: cfg_iconOrder.length === 0
+
+    Binding {
+        target: iconsPage.configModel
+        property: "order"
+        value: iconsPage.cfg_iconOrder
+    }
+
+    Binding {
+        target: iconsPage.configModel
+        property: "filterText"
+        value: iconsPage.searchFilterText
+    }
+
+    Connections {
+        target: iconsPage.configModel
+        function onOrderChanged() {
+            const order = iconsPage.configModel.order;
+            if (order.length !== iconsPage.cfg_iconOrder.length || order.some((itemId, i) => itemId !== iconsPage.cfg_iconOrder[i])) {
+                iconsPage.cfg_iconOrder = order;
+            }
+        }
+    }
 
     function focusDialogFooter(): bool {
         for (let p = iconsPage.parent; p; p = p.parent) {
@@ -154,194 +107,6 @@ KCMUtils.ScrollViewKCM {
         }
         return false;
     }
-
-    function initOrderModel() {
-        const source = Plasmoid.configSystemTrayModel;
-        orderModel.clear();
-        for (let i = 0; i < source.rowCount(); i++) {
-            const modelIndex = source.index(i, 0);
-            if (modelIndex.data(itemIdRole)) {
-                orderModel.append(orderModelRowData(modelIndex));
-            }
-        }
-        if (isGrouped) {
-            regroup();
-        }
-    }
-
-    readonly property var categoryOrder: ["UnknownCategory", "ApplicationStatus", "Communications", "SystemServices", "Hardware"]
-
-    function categoryOrderIndex(category) {
-        const index = categoryOrder.indexOf(category);
-        return index === -1 ? categoryOrder.indexOf("UnknownCategory") : index;
-    }
-
-    property bool bulkReordering: false
-
-    function collectEntryIds() {
-        const order = [];
-        for (let i = 0; i < orderModel.count; i++) {
-            const r = orderModel.get(i);
-            if (!r.isHeader) {
-                order.push(r.itemId);
-            }
-        }
-        return order;
-    }
-
-    function removeSectionHeaders() {
-        for (let i = orderModel.count - 1; i >= 0; i--) {
-            if (orderModel.get(i).isHeader) {
-                orderModel.remove(i);
-            }
-        }
-    }
-
-    function insertSectionHeaders() {
-        let lastCategory = null;
-        for (let i = 0; i < orderModel.count; i++) {
-            const cat = orderModel.get(i).category;
-            if (cat !== lastCategory) {
-                orderModel.insert(i, headerRowData(cat));
-                lastCategory = cat;
-                i++;
-            }
-        }
-    }
-
-    function regroup() {
-        removeSectionHeaders();
-        sortEntriesByCategory();
-        insertSectionHeaders();
-    }
-
-    function sortEntriesByCategory() {
-        const rows = [];
-        for (let i = 0; i < orderModel.count; i++) {
-            const r = orderModel.get(i);
-            rows.push({
-                "stableKey": r.stableKey,
-                "displayText": r.displayText,
-                "category": r.category,
-            });
-        }
-        rows.sort((a, b) => {
-            const categoryDiff = categoryOrderIndex(a.category) - categoryOrderIndex(b.category);
-            if (categoryDiff !== 0) {
-                return categoryDiff;
-            }
-            return a.displayText.localeCompare(b.displayText);
-        });
-        for (let target = 0; target < rows.length; target++) {
-            let cur = -1;
-            for (let j = target; j < orderModel.count; j++) {
-                if (orderModel.get(j).stableKey === rows[target].stableKey) {
-                    cur = j;
-                    break;
-                }
-            }
-            if (cur !== -1 && cur !== target) {
-                orderModel.move(cur, target, 1);
-            }
-        }
-    }
-
-    function applyOrderMode(grouped) {
-        bulkReordering = true;
-        Qt.callLater(() => {
-            if (grouped) {
-                regroup();
-                cfg_iconOrder = [];
-            } else {
-                removeSectionHeaders();
-                cfg_iconOrder = collectEntryIds();
-            }
-            Qt.callLater(() => { bulkReordering = false; });
-        });
-    }
-
-    function syncOrderModel() {
-        const source = Plasmoid.configSystemTrayModel;
-
-        removeSectionHeaders();
-
-        const liveKeys = [];
-        for (let i = 0; i < source.rowCount(); i++) {
-            const modelIndex = source.index(i, 0);
-            if (modelIndex.data(itemIdRole)) {
-                liveKeys.push(rowStableKey(modelIndex));
-            }
-        }
-
-        for (let i = orderModel.count - 1; i >= 0; i--) {
-            if (liveKeys.indexOf(orderModel.get(i).stableKey) === -1) {
-                orderModel.remove(i);
-            }
-        }
-
-        const knownKeys = [];
-        for (let i = 0; i < orderModel.count; i++) {
-            knownKeys.push(orderModel.get(i).stableKey);
-        }
-
-        for (let i = source.rowCount() - 1; i >= 0; i--) {
-            const modelIndex = source.index(i, 0);
-            if (!modelIndex.data(itemIdRole)) {
-                continue;
-            }
-            const stableKey = rowStableKey(modelIndex);
-            if (knownKeys.indexOf(stableKey) !== -1) {
-                continue;
-            }
-
-            let insertIndex = orderModel.count;
-            for (let j = i + 1; j < source.rowCount(); j++) {
-                const anchorIndex = knownKeys.indexOf(rowStableKey(source.index(j, 0)));
-                if (anchorIndex !== -1) {
-                    insertIndex = anchorIndex;
-                    break;
-                }
-            }
-
-            orderModel.insert(insertIndex, orderModelRowData(modelIndex));
-            knownKeys.splice(insertIndex, 0, stableKey);
-        }
-
-        if (isGrouped) {
-            sortEntriesByCategory();
-            insertSectionHeaders();
-        }
-    }
-
-    function refreshOrderModelRow(stableKey) {
-        for (let i = 0; i < orderModel.count; i++) {
-            const r = orderModel.get(i);
-            if (r.isHeader) {
-                continue;
-            }
-            if (r.stableKey === stableKey) {
-                const modelIndex = findConfigModelIndexByStableKey(stableKey);
-                if (modelIndex) {
-                    const newData = orderModelRowData(modelIndex);
-                    const categoryChanged = newData.category !== r.category;
-                    orderModel.set(i, newData);
-                    return categoryChanged ? "category-changed" : true;
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function moveOrderModelEntry(oldIndex, newIndex) {
-        if (oldIndex === newIndex || oldIndex < 0 || newIndex < 0 || oldIndex >= orderModel.count || newIndex >= orderModel.count) {
-            return;
-        }
-        orderModel.move(oldIndex, newIndex, 1);
-        cfg_iconOrder = collectEntryIds();
-    }
-
-    Component.onCompleted: initOrderModel()
 
     function saveConfig() {
         for (const [key, value] of changedVisibility.entries()) {
@@ -419,13 +184,13 @@ KCMUtils.ScrollViewKCM {
     }
 
     Connections {
-        target: Plasmoid.configSystemTrayModel
+        target: Plasmoid.systemTrayModel
         function onRowsRemoved() {
             // if the user closes an app with a SNI that has a visibility change queued, we need to remove it
             // from the queue as the change is no longer visible in the UI.
             let idsToRemove = [...iconsPage.changedVisibility.keys()];
-            for (let i = 0; i < Plasmoid.configSystemTrayModel.rowCount() && idsToRemove.length > 0; ++i) {
-                let itemId = Plasmoid.configSystemTrayModel.index(i, 0).data(Qt.UserRole + 2);
+            for (let i = 0; i < Plasmoid.systemTrayModel.rowCount() && idsToRemove.length > 0; ++i) {
+                let itemId = Plasmoid.systemTrayModel.index(i, 0).data(Qt.UserRole + 2);
                 idsToRemove = idsToRemove.filter(id => id !== itemId);
             }
             idsToRemove.forEach(id => {
@@ -433,32 +198,6 @@ KCMUtils.ScrollViewKCM {
             });
             if (idsToRemove.length > 0) {
                 iconsPage.changedVisibilityChanged();
-            }
-
-            iconsPage.syncOrderModel();
-        }
-        function onRowsInserted() {
-            iconsPage.syncOrderModel();
-        }
-        function onDataChanged(topLeft, bottomRight) {
-            let needsSync = false;
-            let categoryChanged = false;
-            for (let i = topLeft.row; i <= bottomRight.row; i++) {
-                const modelIndex = Plasmoid.configSystemTrayModel.index(i, 0);
-                if (!modelIndex.data(iconsPage.itemIdRole)) {
-                    continue;
-                }
-                const result = iconsPage.refreshOrderModelRow(iconsPage.rowStableKey(modelIndex));
-                if (result === false) {
-                    needsSync = true;
-                } else if (result === "category-changed") {
-                    categoryChanged = true;
-                }
-            }
-            if (needsSync) {
-                iconsPage.syncOrderModel();
-            } else if (categoryChanged && iconsPage.isGrouped) {
-                iconsPage.regroup();
             }
         }
     }
@@ -664,7 +403,7 @@ KCMUtils.ScrollViewKCM {
                 currentIndex: iconsPage.isGrouped ? 0 : 1
 
                 onActivated: index => {
-                    iconsPage.applyOrderMode(index === 0);
+                    iconsPage.configModel.setGrouped(index === 0);
                     currentIndex = Qt.binding(() => iconsPage.isGrouped ? 0 : 1);
                 }
             }
@@ -679,7 +418,7 @@ KCMUtils.ScrollViewKCM {
 
         clip: true
 
-        model: orderModel
+        model: iconsPage.configModel
         cacheBuffer: Math.max(1, count) * Kirigami.Units.gridUnit * 4
 
         activeFocusOnTab: false
@@ -781,7 +520,6 @@ KCMUtils.ScrollViewKCM {
         }
 
         move: Transition {
-            enabled: !iconsPage.bulkReordering
             NumberAnimation {
                 property: "y"
                 duration: Kirigami.Units.longDuration
@@ -789,7 +527,6 @@ KCMUtils.ScrollViewKCM {
             }
         }
         moveDisplaced: Transition {
-            enabled: !iconsPage.bulkReordering
             NumberAnimation {
                 property: "y"
                 duration: Kirigami.Units.longDuration
@@ -802,25 +539,19 @@ KCMUtils.ScrollViewKCM {
 
             required property int index
             required property bool isHeader
-            required property string category
+            required property var applet
+            required property var category
+            required property var decoration
             required property string displayText
             required property string itemId
             required property string itemType
-
-            readonly property var configData: isHeader ? null : iconsPage.configDataForItemId(itemId)
-            readonly property var applet: configData ? configData.applet : null
-            readonly property var decoration: configData ? configData.decoration : undefined
 
             readonly property Item activeItem: isHeader ? headerLoader.item : entryLoader.item
 
             readonly property var focusables: entryLoader.item ? entryLoader.item.focusables : []
 
-            readonly property bool matchesFilter: isHeader || !iconsPage.searchFilterText
-                || displayText.toLowerCase().indexOf(iconsPage.searchFilterText.toLowerCase()) !== -1
-            visible: matchesFilter
             width: itemsList.width
             implicitHeight: activeItem ? activeItem.implicitHeight : 0
-            height: visible ? implicitHeight : 0
 
             Loader {
                 id: headerLoader
@@ -844,7 +575,6 @@ KCMUtils.ScrollViewKCM {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         applet: delegateRoot.applet
-                        category: delegateRoot.category
                         decoration: delegateRoot.decoration
                         displayText: delegateRoot.displayText
                         index: delegateRoot.index
@@ -866,7 +596,6 @@ KCMUtils.ScrollViewKCM {
         id: listItem
 
         required property var applet
-        required property string category
         required property var decoration
         required property string displayText
         required property int index
@@ -922,7 +651,7 @@ KCMUtils.ScrollViewKCM {
 
                     Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1", listItem.displayText)
 
-                    onMoveRequested: (oldIndex, newIndex) => iconsPage.moveOrderModelEntry(oldIndex, newIndex)
+                    onMoveRequested: (oldIndex, newIndex) => iconsPage.configModel.move(oldIndex, newIndex)
                 }
 
                 Kirigami.Icon {

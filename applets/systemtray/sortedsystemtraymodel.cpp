@@ -19,83 +19,51 @@ static const QList<QString> s_categoryOrder = {
     QStringLiteral("Hardware"),
 };
 
-SortedSystemTrayModel::SortedSystemTrayModel(SortingType sorting, QObject *parent, QPointer<SystemTraySettings> settings)
+SortedSystemTrayModel::SortedSystemTrayModel(QPointer<SystemTraySettings> settings, QObject *parent)
     : QSortFilterProxyModel(parent)
-    , m_sorting(sorting)
     , m_settings(settings)
 {
     setSortLocaleAware(true);
     sort(0);
 
     if (m_settings) {
-        connect(m_settings.data(), &SystemTraySettings::itemOrderChanged, this, [this]() {
-            invalidate();
-        });
+        connect(m_settings.data(), &SystemTraySettings::itemOrderChanged, this, &SortedSystemTrayModel::invalidate);
     }
 }
 
 bool SortedSystemTrayModel::lessThan(const QModelIndex &left, const QModelIndex &right) const
 {
-    switch (m_sorting) {
-    case SortedSystemTrayModel::SortingType::ConfigurationPage:
-        return lessThanConfigurationPage(left, right);
-    case SortedSystemTrayModel::SortingType::SystemTray:
-        return lessThanSystemTray(left, right);
-    }
-
-    return QSortFilterProxyModel::lessThan(left, right);
+    return compare(left, right, m_settings ? m_settings->itemOrder() : QStringList()) < 0;
 }
 
-bool SortedSystemTrayModel::lessThanConfigurationPage(const QModelIndex &left, const QModelIndex &right) const
+int SortedSystemTrayModel::compare(const QModelIndex &left, const QModelIndex &right, const QStringList &order)
 {
-    if (const auto userOrderComparison = compareUserDefinedOrder(left, right)) {
-        return *userOrderComparison < 0;
+    if (!order.isEmpty()) {
+        const int leftIndex = orderIndex(left, order);
+        const int rightIndex = orderIndex(right, order);
+        if (leftIndex != -1 && rightIndex != -1) {
+            return leftIndex - rightIndex;
+        }
+        if (leftIndex != -1 || rightIndex != -1) {
+            return leftIndex != -1 ? -1 : 1;
+        }
     }
 
-    const int categoriesComparison = compareCategoriesAlphabetically(left, right);
-    if (categoriesComparison == 0) {
-        return QSortFilterProxyModel::lessThan(left, right);
-    } else {
-        return categoriesComparison < 0;
+    const int categoriesComparison = s_categoryOrder.indexOf(category(left)) - s_categoryOrder.indexOf(category(right));
+    if (categoriesComparison != 0) {
+        return categoriesComparison;
     }
+
+    return QString::localeAwareCompare(left.data(Qt::DisplayRole).toString(), right.data(Qt::DisplayRole).toString());
 }
 
-bool SortedSystemTrayModel::lessThanSystemTray(const QModelIndex &left, const QModelIndex &right) const
+QString SortedSystemTrayModel::category(const QModelIndex &index)
 {
-    if (const auto userOrderComparison = compareUserDefinedOrder(left, right)) {
-        return *userOrderComparison < 0;
-    }
-
-    const int categoriesComparison = compareCategoriesOrderly(left, right);
-    if (categoriesComparison == 0) {
-        return QSortFilterProxyModel::lessThan(left, right);
-    } else {
-        return categoriesComparison < 0;
-    }
+    const QString category = index.data(static_cast<int>(BaseModel::BaseRole::Category)).toString();
+    return s_categoryOrder.contains(category) ? category : QStringLiteral("UnknownCategory");
 }
 
-std::optional<int> SortedSystemTrayModel::compareUserDefinedOrder(const QModelIndex &left, const QModelIndex &right) const
-{
-    if (!m_settings) {
-        return std::nullopt;
-    }
-
-    const QStringList order = m_settings->itemOrder();
-    if (order.isEmpty()) {
-        return std::nullopt;
-    }
-
-    const int leftIndex = orderIndexForRow(left, order);
-    const int rightIndex = orderIndexForRow(right, order);
-
-    if (leftIndex == -1 || rightIndex == -1) {
-        return std::nullopt;
-    }
-
-    return leftIndex - rightIndex;
-}
-
-int SortedSystemTrayModel::orderIndexForRow(const QModelIndex &index, const QStringList &order) const
+int SortedSystemTrayModel::orderIndex(const QModelIndex &index, const QStringList &order)
 {
     const QString itemId = index.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString();
     if (itemId.isEmpty()) {
@@ -110,48 +78,14 @@ int SortedSystemTrayModel::orderIndexForRow(const QModelIndex &index, const QStr
     }
 
     int orderIndex = -1;
-    int searchFrom = 0;
     for (int seen = 0; seen <= occurrence; ++seen) {
-        orderIndex = order.indexOf(itemId, searchFrom);
+        orderIndex = order.indexOf(itemId, orderIndex + 1);
         if (orderIndex == -1) {
             break;
         }
-        searchFrom = orderIndex + 1;
     }
 
     return orderIndex;
-}
-
-int SortedSystemTrayModel::compareCategoriesAlphabetically(const QModelIndex &left, const QModelIndex &right) const
-{
-    QVariant leftData = left.data(static_cast<int>(BaseModel::BaseRole::Category));
-    QString leftCategory = leftData.isNull() ? QStringLiteral("UnknownCategory") : leftData.toString();
-
-    QVariant rightData = right.data(static_cast<int>(BaseModel::BaseRole::Category));
-    QString rightCategory = rightData.isNull() ? QStringLiteral("UnknownCategory") : rightData.toString();
-
-    return QString::localeAwareCompare(leftCategory, rightCategory);
-}
-
-int SortedSystemTrayModel::compareCategoriesOrderly(const QModelIndex &left, const QModelIndex &right) const
-{
-    QVariant leftData = left.data(static_cast<int>(BaseModel::BaseRole::Category));
-    QString leftCategory = leftData.isNull() ? QStringLiteral("UnknownCategory") : leftData.toString();
-
-    QVariant rightData = right.data(static_cast<int>(BaseModel::BaseRole::Category));
-    QString rightCategory = rightData.isNull() ? QStringLiteral("UnknownCategory") : rightData.toString();
-
-    int leftIndex = s_categoryOrder.indexOf(leftCategory);
-    if (leftIndex == -1) {
-        leftIndex = s_categoryOrder.indexOf(QStringLiteral("UnknownCategory"));
-    }
-
-    int rightIndex = s_categoryOrder.indexOf(rightCategory);
-    if (rightIndex == -1) {
-        rightIndex = s_categoryOrder.indexOf(QStringLiteral("UnknownCategory"));
-    }
-
-    return leftIndex - rightIndex;
 }
 
 #include "moc_sortedsystemtraymodel.cpp"

@@ -24,6 +24,7 @@ class SystemTraySettings;
 class StatusNotifierModel;
 class SystemTrayModel;
 class SortedSystemTrayModel;
+class SystemTrayConfigModel;
 class KJob;
 
 class SystemTray : public Plasma::Containment
@@ -103,7 +104,7 @@ private:
     StatusNotifierModel *m_statusNotifierModel = nullptr;
     SystemTrayModel *m_systemTrayModel = nullptr;
     SortedSystemTrayModel *m_sortedSystemTrayModel = nullptr;
-    SortedSystemTrayModel *m_configSystemTrayModel = nullptr;
+    SystemTrayConfigModel *m_configSystemTrayModel = nullptr;
 
     QHash<QString /*plugin id*/, int /*config group*/> m_configGroupIds;
 };
