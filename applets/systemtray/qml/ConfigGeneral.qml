@@ -463,11 +463,9 @@ KCMUtils.ScrollViewKCM {
                 id: headerLoader
                 active: delegateRoot.isHeader
                 width: delegateRoot.width
-                sourceComponent: Component {
-                    Kirigami.ListSectionHeader {
-                        width: headerLoader.width
-                        text: iconsPage.categoryName(delegateRoot.category)
-                    }
+                sourceComponent: Kirigami.ListSectionHeader {
+                    width: headerLoader.width
+                    text: iconsPage.categoryName(delegateRoot.category)
                 }
             }
 
@@ -476,17 +474,15 @@ KCMUtils.ScrollViewKCM {
                 active: !delegateRoot.isHeader
                 anchors.left: parent.left
                 anchors.right: parent.right
-                sourceComponent: Component {
-                    TrayItemDelegate {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        applet: delegateRoot.applet
-                        decoration: delegateRoot.decoration
-                        displayText: delegateRoot.displayText
-                        index: delegateRoot.index
-                        itemId: delegateRoot.itemId
-                        itemType: delegateRoot.itemType
-                    }
+                sourceComponent: TrayItemDelegate {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    applet: delegateRoot.applet
+                    decoration: delegateRoot.decoration
+                    displayText: delegateRoot.displayText
+                    index: delegateRoot.index
+                    itemId: delegateRoot.itemId
+                    itemType: delegateRoot.itemType
                 }
             }
         }
