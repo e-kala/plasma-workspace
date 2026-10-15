@@ -73,12 +73,6 @@ KCMUtils.ScrollViewKCM {
         value: iconsPage.cfg_iconOrder
     }
 
-    Binding {
-        target: iconsPage.configModel
-        property: "filterText"
-        value: searchField.text
-    }
-
     Connections {
         target: iconsPage.configModel
         function onRowsInserted() {
@@ -356,49 +350,6 @@ KCMUtils.ScrollViewKCM {
                 font: Kirigami.Theme.smallFont
             }
         }
-
-        Kirigami.Separator {
-            Layout.fillWidth: true
-            Layout.topMargin: Kirigami.Units.smallSpacing
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-
-            Kirigami.Heading {
-                text: i18nc("@title:group system tray entries", "Entries")
-                level: 3
-                elide: Text.ElideRight
-            }
-
-            Kirigami.SearchField {
-                id: searchField
-                Layout.fillWidth: true
-            }
-
-            QQC2.CheckBox {
-                text: i18nc("@option:check, This is referring to system tray entries", "Always show all")
-                checked: iconsPage.cfg_showAllItems
-                onToggled: iconsPage.cfg_showAllItems = checked
-            }
-
-            QQC2.ComboBox {
-                model: [
-                    i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"),
-                    i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order")
-                ]
-
-                implicitContentWidthPolicy: QQC2.ComboBox.WidestText
-
-                currentIndex: iconsPage.isGrouped ? 0 : 1
-
-                onActivated: index => {
-                    iconsPage.configModel.setGrouped(index === 0);
-                    currentIndex = Qt.binding(() => iconsPage.isGrouped ? 0 : 1);
-                }
-            }
-        }
     }
 
     view: ListView {
@@ -413,6 +364,52 @@ KCMUtils.ScrollViewKCM {
         currentIndex: -1
         keyNavigationEnabled: false
         cacheBuffer: Math.max(1, count) * Kirigami.Units.gridUnit * 4
+
+        headerPositioning: ListView.OverlayHeader
+        header: Kirigami.InlineViewHeader {
+            width: itemsList.width
+            text: i18nc("@title:column", "Entries")
+            actions: [
+                Kirigami.Action {
+                    id: showAllCheckBox
+                    checkable: true
+                    text: i18nc("@option:check, This is referring to system tray entries", "Always show all")
+                    onToggled: iconsPage.cfg_showAllItems = checked
+                    checked: iconsPage.cfg_showAllItems
+                    displayComponent: QQC2.CheckBox {
+                        horizontalPadding: Kirigami.Units.largeSpacing
+                        text: showAllCheckBox.text
+                        checked: showAllCheckBox.checked
+                        onToggled: showAllCheckBox.toggle()
+                    }
+                },
+                Kirigami.Action {
+                    displayHint: Kirigami.DisplayHint.KeepVisible
+                    displayComponent: QQC2.ComboBox {
+                        model: [
+                            i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"),
+                            i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order")
+                        ]
+
+                        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
+
+                        currentIndex: iconsPage.isGrouped ? 0 : 1
+
+                        onActivated: index => {
+                            iconsPage.configModel.setGrouped(index === 0);
+                            currentIndex = Qt.binding(() => iconsPage.isGrouped ? 0 : 1);
+                        }
+                    }
+                },
+                Kirigami.Action {
+                    displayHint: Kirigami.DisplayHint.KeepVisible
+                    displayComponent: Kirigami.SearchField {
+                        Component.onCompleted: iconsPage.configModel.filterText = text
+                        onTextChanged: iconsPage.configModel.filterText = text
+                    }
+                }
+            ]
+        }
 
         function restackDelegates(): void {
             let previous = null;
@@ -527,7 +524,7 @@ KCMUtils.ScrollViewKCM {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: itemsList
-                    visible: searchField.text.length === 0 && !iconsPage.isGrouped
+                    visible: iconsPage.configModel.filterText.length === 0 && !iconsPage.isGrouped
 
                     Accessible.name: i18nc("@info:whatsthis %1 is the name of the system tray entry", "Reorder %1", listItem.displayText)
 
