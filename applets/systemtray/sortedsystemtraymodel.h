@@ -18,6 +18,7 @@ public:
     explicit SortedSystemTrayModel(QPointer<SystemTraySettings> settings, QObject *parent = nullptr);
 
     static int compare(const QModelIndex &left, const QModelIndex &right, const QStringList &order);
+    static int compareByCategory(const QModelIndex &left, const QModelIndex &right);
 
     static QString category(const QModelIndex &index);
 

@@ -26,6 +26,7 @@ private Q_SLOTS:
     void testGroupedByCategory();
     void testManualOrder();
     void testSwitchingOrderMode();
+    void testSwitchingOrderModeKeepsNotificationsFirst();
     void testMove();
     void testMoveKeepsPositionOfAbsentItems();
     void testMoveIgnoredWhenGroupedOrFiltered();
@@ -123,6 +124,27 @@ void SystemTrayConfigModelTest::testSwitchingOrderMode()
     QVERIFY(moveSpy.count() > 0);
     QCOMPARE(layoutSpy.count(), 0);
     QCOMPARE(resetSpy.count(), 0);
+}
+
+void SystemTrayConfigModelTest::testSwitchingOrderModeKeepsNotificationsFirst()
+{
+    QList<MockTrayModel::Item> trayItems = items();
+    trayItems.append({u"org.kde.plasma.notifications"_s, u"SystemServices"_s});
+    MockTrayModel source(trayItems);
+    SystemTrayConfigModel model(&source);
+    QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
+
+    QCOMPARE(rows(model),
+             (QStringList{u"#ApplicationStatus"_s,
+                          u"alpha"_s,
+                          u"bravo"_s,
+                          u"#SystemServices"_s,
+                          u"org.kde.plasma.notifications"_s,
+                          u"#Hardware"_s,
+                          u"hotel"_s}));
+
+    model.setGrouped(false);
+    QCOMPARE(model.order(), (QStringList{u"org.kde.plasma.notifications"_s, u"alpha"_s, u"bravo"_s, u"hotel"_s}));
 }
 
 void SystemTrayConfigModelTest::testMove()

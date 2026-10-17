@@ -31,6 +31,8 @@ private Q_SLOTS:
     void cleanup();
 
     void testDefaultOrder();
+    void testDefaultOrderNotificationsFirst();
+    void testCustomOrderMovesNotifications();
     void testCustomOrderNoDuplicates();
     void testCustomOrderWithDuplicateItemIds();
     void testUnlistedItemsFollowListedOnes();
@@ -81,6 +83,40 @@ void SortedSystemTrayModelTest::testDefaultOrder()
     proxy.setSourceModel(&source);
 
     QCOMPARE(itemIds(proxy), (QStringList{u"unknown"_s, u"alpha"_s, u"zulu"_s, u"hardware"_s}));
+}
+
+void SortedSystemTrayModelTest::testDefaultOrderNotificationsFirst()
+{
+    QPointer<SystemTraySettings> settings = createSettings();
+
+    MockTrayModel source({
+        {u"alpha"_s, u"ApplicationStatus"_s},
+        {u"org.kde.plasma.notifications"_s, u"SystemServices"_s},
+        {u"unknown"_s, u"UnknownCategory"_s},
+    });
+
+    SortedSystemTrayModel proxy(settings);
+    proxy.setSourceModel(&source);
+
+    QCOMPARE(itemIds(proxy), (QStringList{u"org.kde.plasma.notifications"_s, u"unknown"_s, u"alpha"_s}));
+}
+
+void SortedSystemTrayModelTest::testCustomOrderMovesNotifications()
+{
+    QPointer<SystemTraySettings> settings = createSettings();
+
+    MockTrayModel source({
+        {u"alpha"_s, u"ApplicationStatus"_s},
+        {u"org.kde.plasma.notifications"_s, u"SystemServices"_s},
+        {u"unknown"_s, u"UnknownCategory"_s},
+    });
+
+    SortedSystemTrayModel proxy(settings);
+    proxy.setSourceModel(&source);
+
+    settings->setItemOrder({u"alpha"_s, u"org.kde.plasma.notifications"_s});
+
+    QCOMPARE(itemIds(proxy), (QStringList{u"alpha"_s, u"org.kde.plasma.notifications"_s, u"unknown"_s}));
 }
 
 void SortedSystemTrayModelTest::testCustomOrderNoDuplicates()

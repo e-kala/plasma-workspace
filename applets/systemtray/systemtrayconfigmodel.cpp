@@ -143,8 +143,13 @@ void SystemTrayConfigModel::setGrouped(bool grouped)
         return;
     }
 
+    QList<QPersistentModelIndex> entries = sortedEntries();
+    std::stable_sort(entries.begin(), entries.end(), [](const QPersistentModelIndex &left, const QPersistentModelIndex &right) {
+        return SortedSystemTrayModel::compare(left, right, QStringList()) < 0;
+    });
+
     QStringList order;
-    for (const QPersistentModelIndex &entry : sortedEntries()) {
+    for (const QPersistentModelIndex &entry : std::as_const(entries)) {
         order.append(entry.data(s_itemIdRole).toString());
     }
     setOrderInternal(order);
@@ -204,6 +209,9 @@ QList<QPersistentModelIndex> SystemTrayConfigModel::sortedEntries(int excludeFir
     }
 
     std::stable_sort(entries.begin(), entries.end(), [this](const QPersistentModelIndex &left, const QPersistentModelIndex &right) {
+        if (isGrouped()) {
+            return SortedSystemTrayModel::compareByCategory(left, right) < 0;
+        }
         return SortedSystemTrayModel::compare(left, right, m_order) < 0;
     });
 

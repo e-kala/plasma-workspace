@@ -47,8 +47,19 @@ int SortedSystemTrayModel::compare(const QModelIndex &left, const QModelIndex &r
         if (leftIndex != -1 || rightIndex != -1) {
             return leftIndex != -1 ? -1 : 1;
         }
+    } else {
+        const bool leftIsNotifications = left.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString() == QLatin1String("org.kde.plasma.notifications");
+        const bool rightIsNotifications = right.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString() == QLatin1String("org.kde.plasma.notifications");
+        if (leftIsNotifications != rightIsNotifications) {
+            return leftIsNotifications ? -1 : 1;
+        }
     }
 
+    return compareByCategory(left, right);
+}
+
+int SortedSystemTrayModel::compareByCategory(const QModelIndex &left, const QModelIndex &right)
+{
     const int categoriesComparison = s_categoryOrder.indexOf(category(left)) - s_categoryOrder.indexOf(category(right));
     if (categoriesComparison != 0) {
         return categoriesComparison;
