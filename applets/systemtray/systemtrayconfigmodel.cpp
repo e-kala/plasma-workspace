@@ -38,7 +38,7 @@ SystemTrayConfigModel::SystemTrayConfigModel(QAbstractItemModel *sourceModel, QO
     });
     connect(sourceModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &topLeft, const QModelIndex &bottomRight, const QList<int> &roles) {
         for (int sourceRow = topLeft.row(); sourceRow <= bottomRight.row(); ++sourceRow) {
-            const int row = rowForSourceIndex(m_sourceModel->index(sourceRow, 0));
+            const int row = m_rows.indexOf(m_sourceModel->index(sourceRow, 0));
             if (row != -1) {
                 Q_EMIT dataChanged(index(row, 0), index(row, 0), roles);
             }
@@ -68,24 +68,11 @@ QVariant SystemTrayConfigModel::data(const QModelIndex &index, int role) const
         return {};
     }
 
-    const Row &row = m_rows.at(index.row());
-    if (role == static_cast<int>(Role::IsHeader)) {
-        return row.isHeader();
+    const QPersistentModelIndex &sourceIndex = m_rows.at(index.row());
+    if (role == s_categoryRole) {
+        return SortedSystemTrayModel::category(sourceIndex);
     }
-    if (!row.isHeader()) {
-        return row.sourceIndex.data(role);
-    }
-
-    switch (role) {
-    case s_categoryRole:
-        return row.category;
-    case Qt::DisplayRole:
-    case static_cast<int>(BaseModel::BaseRole::ItemId):
-    case static_cast<int>(BaseModel::BaseRole::ItemType):
-        return QString();
-    default:
-        return {};
-    }
+    return sourceIndex.data(role);
 }
 
 int SystemTrayConfigModel::rowCount(const QModelIndex &parent) const
@@ -95,9 +82,7 @@ int SystemTrayConfigModel::rowCount(const QModelIndex &parent) const
 
 QHash<int, QByteArray> SystemTrayConfigModel::roleNames() const
 {
-    QHash<int, QByteArray> roles = m_sourceModel ? m_sourceModel->roleNames() : QHash<int, QByteArray>();
-    roles.insert(static_cast<int>(Role::IsHeader), QByteArrayLiteral("isHeader"));
-    return roles;
+    return m_sourceModel ? m_sourceModel->roleNames() : QAbstractListModel::roleNames();
 }
 
 QStringList SystemTrayConfigModel::order() const
@@ -161,9 +146,9 @@ void SystemTrayConfigModel::move(int from, int to)
         return;
     }
 
-    const QString itemId = m_rows.at(from).sourceIndex.data(s_itemIdRole).toString();
+    const QString itemId = m_rows.at(from).data(s_itemIdRole).toString();
     const auto hasSameId = [this, &itemId](int row) {
-        return m_rows.at(row).sourceIndex.data(s_itemIdRole).toString() == itemId;
+        return m_rows.at(row).data(s_itemIdRole).toString() == itemId;
     };
     if (to < from) {
         for (int row = from - 1; row >= to; --row) {
@@ -218,25 +203,14 @@ QList<QPersistentModelIndex> SystemTrayConfigModel::sortedEntries(int excludeFir
     return entries;
 }
 
-QList<SystemTrayConfigModel::Row> SystemTrayConfigModel::buildRows(int excludeFirst, int excludeLast) const
+QList<QPersistentModelIndex> SystemTrayConfigModel::buildRows(int excludeFirst, int excludeLast) const
 {
-    QList<Row> rows;
-    QString lastCategory;
-
-    for (const QPersistentModelIndex &entry : sortedEntries(excludeFirst, excludeLast)) {
-        if (!m_filterText.isEmpty() && !entry.data(Qt::DisplayRole).toString().contains(m_filterText, Qt::CaseInsensitive)) {
-            continue;
-        }
-        if (isGrouped()) {
-            const QString category = SortedSystemTrayModel::category(entry);
-            if (category != lastCategory) {
-                rows.append(Row{QPersistentModelIndex(), category});
-                lastCategory = category;
-            }
-        }
-        rows.append(Row{entry, QString()});
+    QList<QPersistentModelIndex> rows = sortedEntries(excludeFirst, excludeLast);
+    if (!m_filterText.isEmpty()) {
+        rows.removeIf([this](const QPersistentModelIndex &entry) {
+            return !entry.data(Qt::DisplayRole).toString().contains(m_filterText, Qt::CaseInsensitive);
+        });
     }
-
     return rows;
 }
 
@@ -245,7 +219,7 @@ void SystemTrayConfigModel::update(int excludeFirst, int excludeLast)
     applyRows(buildRows(excludeFirst, excludeLast));
 }
 
-void SystemTrayConfigModel::applyRows(const QList<Row> &rows)
+void SystemTrayConfigModel::applyRows(const QList<QPersistentModelIndex> &rows)
 {
     for (int row = m_rows.size() - 1; row >= 0; --row) {
         if (!rows.contains(m_rows.at(row))) {
@@ -255,8 +229,8 @@ void SystemTrayConfigModel::applyRows(const QList<Row> &rows)
         }
     }
 
-    QList<Row> kept;
-    for (const Row &row : rows) {
+    QList<QPersistentModelIndex> kept;
+    for (const QPersistentModelIndex &row : rows) {
         if (m_rows.contains(row)) {
             kept.append(row);
         }
@@ -271,7 +245,7 @@ void SystemTrayConfigModel::applyRows(const QList<Row> &rows)
     }
 
     for (int row = 0; row < rows.size(); ++row) {
-        if (row >= m_rows.size() || !(m_rows.at(row) == rows.at(row))) {
+        if (row >= m_rows.size() || m_rows.at(row) != rows.at(row)) {
             beginInsertRows(QModelIndex(), row, row);
             m_rows.insert(row, rows.at(row));
             endInsertRows();
@@ -282,10 +256,8 @@ void SystemTrayConfigModel::applyRows(const QList<Row> &rows)
 QStringList SystemTrayConfigModel::mergedOrder() const
 {
     QStringList shown;
-    for (const Row &row : m_rows) {
-        if (!row.isHeader()) {
-            shown.append(row.sourceIndex.data(s_itemIdRole).toString());
-        }
+    for (const QPersistentModelIndex &row : m_rows) {
+        shown.append(row.data(s_itemIdRole).toString());
     }
 
     QHash<QString, int> remaining;
@@ -315,16 +287,6 @@ void SystemTrayConfigModel::setOrderInternal(const QStringList &order)
     m_order = order;
     update();
     Q_EMIT orderChanged();
-}
-
-int SystemTrayConfigModel::rowForSourceIndex(const QModelIndex &sourceIndex) const
-{
-    for (int row = 0; row < m_rows.size(); ++row) {
-        if (!m_rows.at(row).isHeader() && m_rows.at(row).sourceIndex == sourceIndex) {
-            return row;
-        }
-    }
-    return -1;
 }
 
 #include "moc_systemtrayconfigmodel.cpp"

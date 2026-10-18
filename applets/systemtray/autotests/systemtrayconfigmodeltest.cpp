@@ -18,12 +18,13 @@ class SystemTrayConfigModelTest : public QObject
 {
     Q_OBJECT
 private:
-    static QStringList rows(const QAbstractItemModel &model);
+    static QStringList rows(const SystemTrayConfigModel &model);
     static QStringList names(const QAbstractItemModel &model);
     static QList<MockTrayModel::Item> items();
 
 private Q_SLOTS:
     void testGroupedByCategory();
+    void testUnknownCategoriesShareSection();
     void testManualOrder();
     void testSwitchingOrderMode();
     void testSwitchingOrderModeKeepsNotificationsFirst();
@@ -38,16 +39,18 @@ private Q_SLOTS:
     void testMoveWithDuplicateItemIds();
 };
 
-QStringList SystemTrayConfigModelTest::rows(const QAbstractItemModel &model)
+QStringList SystemTrayConfigModelTest::rows(const SystemTrayConfigModel &model)
 {
     QStringList rows;
+    QString lastCategory;
     for (int row = 0; row < model.rowCount(); ++row) {
         const QModelIndex index = model.index(row, 0);
-        if (index.data(static_cast<int>(SystemTrayConfigModel::Role::IsHeader)).toBool()) {
-            rows.append(u'#' + index.data(static_cast<int>(BaseModel::BaseRole::Category)).toString());
-        } else {
-            rows.append(index.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString());
+        const QString category = index.data(static_cast<int>(BaseModel::BaseRole::Category)).toString();
+        if (model.isGrouped() && category != lastCategory) {
+            rows.append(u'#' + category);
+            lastCategory = category;
         }
+        rows.append(index.data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString());
     }
     return rows;
 }
@@ -78,8 +81,20 @@ void SystemTrayConfigModelTest::testGroupedByCategory()
 
     QVERIFY(model.isGrouped());
     QCOMPARE(rows(model), (QStringList{u"#ApplicationStatus"_s, u"alpha"_s, u"bravo"_s, u"#Hardware"_s, u"hotel"_s}));
-    QCOMPARE(model.index(0, 0).data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString(), QString());
-    QVERIFY(!model.index(1, 0).data(static_cast<int>(SystemTrayConfigModel::Role::IsHeader)).toBool());
+    QCOMPARE(model.rowCount(), 3);
+}
+
+void SystemTrayConfigModelTest::testUnknownCategoriesShareSection()
+{
+    MockTrayModel source({
+        {u"alpha"_s, u"Foo"_s},
+        {u"bravo"_s, QString()},
+        {u"charlie"_s, u"UnknownCategory"_s},
+    });
+    SystemTrayConfigModel model(&source);
+    QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
+
+    QCOMPARE(rows(model), (QStringList{u"#UnknownCategory"_s, u"alpha"_s, u"bravo"_s, u"charlie"_s}));
 }
 
 void SystemTrayConfigModelTest::testManualOrder()
@@ -285,7 +300,7 @@ void SystemTrayConfigModelTest::testDataChangedWithoutOrderRoles()
 
     source.setName(1, u"aaa"_s, {Qt::DecorationRole});
     QCOMPARE(dataSpy.count(), 1);
-    QCOMPARE(dataSpy.at(0).at(0).toModelIndex(), model.index(2, 0));
+    QCOMPARE(dataSpy.at(0).at(0).toModelIndex(), model.index(1, 0));
     QCOMPARE(moveSpy.count(), 0);
     QCOMPARE(rows(model), (QStringList{u"#ApplicationStatus"_s, u"alpha"_s, u"bravo"_s, u"#Hardware"_s, u"hotel"_s}));
 

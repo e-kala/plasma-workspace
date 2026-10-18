@@ -418,51 +418,40 @@ KCMUtils.ScrollViewKCM {
             }
         }
 
+        section {
+            property: iconsPage.isGrouped ? "category" : ""
+            delegate: Kirigami.ListSectionHeader {
+                required property string section
+
+                text: iconsPage.categoryName(section)
+                width: itemsList.width
+            }
+        }
+
         delegate: Item {
             id: delegateRoot
 
             required property int index
-            required property bool isHeader
             required property var applet
-            required property var category
             required property var decoration
             required property string displayText
             required property string itemId
             required property string itemType
 
-            readonly property Item activeItem: isHeader ? headerLoader.item : entryLoader.item
-
             width: itemsList.width
-            implicitHeight: activeItem ? activeItem.implicitHeight : 0
+            implicitHeight: trayItemDelegate.implicitHeight
 
             // Tab order follows the stacking order, and delegates are created out of order (scrolling, model changes)
             Component.onCompleted: Qt.callLater(itemsList.restackDelegates)
 
-            Loader {
-                id: headerLoader
-                active: delegateRoot.isHeader
-                width: delegateRoot.width
-                sourceComponent: Kirigami.ListSectionHeader {
-                    width: headerLoader.width
-                    text: iconsPage.categoryName(delegateRoot.category)
-                }
-            }
-
-            Loader {
-                id: entryLoader
-                active: !delegateRoot.isHeader
-                anchors.left: parent.left
-                anchors.right: parent.right
-                sourceComponent: TrayItemDelegate {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    applet: delegateRoot.applet
-                    decoration: delegateRoot.decoration
-                    displayText: delegateRoot.displayText
-                    index: delegateRoot.index
-                    itemId: delegateRoot.itemId
-                    itemType: delegateRoot.itemType
-                }
+            TrayItemDelegate {
+                id: trayItemDelegate
+                applet: delegateRoot.applet
+                decoration: delegateRoot.decoration
+                displayText: delegateRoot.displayText
+                index: delegateRoot.index
+                itemId: delegateRoot.itemId
+                itemType: delegateRoot.itemType
             }
         }
     }
@@ -482,6 +471,8 @@ KCMUtils.ScrollViewKCM {
         required property int index
         required property string itemId
         required property string itemType
+
+        width: itemsList.width
 
         Kirigami.Theme.useAlternateBackgroundColor: true
 

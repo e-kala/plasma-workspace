@@ -18,10 +18,6 @@ class SystemTrayConfigModel : public QAbstractListModel
     Q_PROPERTY(QString filterText READ filterText WRITE setFilterText NOTIFY filterTextChanged)
 
 public:
-    enum class Role {
-        IsHeader = Qt::UserRole + 2000,
-    };
-
     explicit SystemTrayConfigModel(QAbstractItemModel *sourceModel, QObject *parent = nullptr);
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
@@ -44,30 +40,15 @@ Q_SIGNALS:
     void filterTextChanged();
 
 private:
-    struct Row {
-        QPersistentModelIndex sourceIndex;
-        QString category;
-
-        bool isHeader() const
-        {
-            return !category.isEmpty();
-        }
-        bool operator==(const Row &other) const
-        {
-            return isHeader() ? category == other.category : sourceIndex == other.sourceIndex;
-        }
-    };
-
     QList<QPersistentModelIndex> sortedEntries(int excludeFirst = -1, int excludeLast = -1) const;
-    QList<Row> buildRows(int excludeFirst = -1, int excludeLast = -1) const;
+    QList<QPersistentModelIndex> buildRows(int excludeFirst = -1, int excludeLast = -1) const;
     void update(int excludeFirst = -1, int excludeLast = -1);
-    void applyRows(const QList<Row> &rows);
+    void applyRows(const QList<QPersistentModelIndex> &rows);
     QStringList mergedOrder() const;
     void setOrderInternal(const QStringList &order);
-    int rowForSourceIndex(const QModelIndex &sourceIndex) const;
 
     QPointer<QAbstractItemModel> m_sourceModel;
-    QList<Row> m_rows;
+    QList<QPersistentModelIndex> m_rows;
     QStringList m_order;
     QString m_filterText;
 };
