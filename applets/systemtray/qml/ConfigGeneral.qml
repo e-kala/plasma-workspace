@@ -75,9 +75,6 @@ KCMUtils.ScrollViewKCM {
 
     Connections {
         target: iconsPage.configModel
-        function onRowsInserted() {
-            Qt.callLater(itemsList.restackDelegates);
-        }
         function onRowsMoved() {
             Qt.callLater(itemsList.restackDelegates);
         }
@@ -438,6 +435,7 @@ KCMUtils.ScrollViewKCM {
             width: itemsList.width
             implicitHeight: activeItem ? activeItem.implicitHeight : 0
 
+            // Tab order follows the stacking order, and delegates are created out of order (scrolling, model changes)
             Component.onCompleted: Qt.callLater(itemsList.restackDelegates)
 
             Loader {
