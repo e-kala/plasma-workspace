@@ -348,7 +348,6 @@ KCMUtils.ScrollViewKCM {
         model: iconsPage.configModel
         currentIndex: -1
         keyNavigationEnabled: false
-        cacheBuffer: Math.max(1, count) * Kirigami.Units.gridUnit * 4
 
         headerPositioning: ListView.OverlayHeader
         header: Kirigami.InlineViewHeader {
