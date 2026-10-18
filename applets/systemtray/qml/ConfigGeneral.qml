@@ -89,19 +89,6 @@ KCMUtils.ScrollViewKCM {
         }
     }
 
-    function stackHeaderBeforeView(): void {
-        for (let header = headerLayout; header?.parent; header = header.parent) {
-            for (let view = itemsList; view?.parent; view = view.parent) {
-                if (header.parent === view.parent) {
-                    Plasmoid.stackItemBefore(header, view);
-                    return;
-                }
-            }
-        }
-    }
-
-    Component.onCompleted: Qt.callLater(stackHeaderBeforeView)
-
     function saveConfig() {
         for (const [key, value] of changedVisibility.entries()) {
             updateVisibility(key, value);
@@ -197,8 +184,6 @@ KCMUtils.ScrollViewKCM {
     }
 
     header: ColumnLayout {
-        id: headerLayout
-
         spacing: Kirigami.Units.smallSpacing
 
         Kirigami.InlineMessage {
