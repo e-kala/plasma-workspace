@@ -386,6 +386,7 @@ KCMUtils.ScrollViewKCM {
                 Kirigami.Action {
                     displayHint: Kirigami.DisplayHint.KeepVisible
                     displayComponent: Kirigami.SearchField {
+                        // The config model outlives this page, so reset any filter left from a previous session
                         Component.onCompleted: iconsPage.configModel.filterText = text
                         onTextChanged: iconsPage.configModel.filterText = text
                     }
