@@ -344,6 +344,7 @@ KCMUtils.ScrollViewKCM {
 
         model: iconsPage.configModel
         currentIndex: -1
+        // ListView would handle Up/Down itself and take focus away from the drag handle
         keyNavigationEnabled: false
 
         headerPositioning: ListView.OverlayHeader
