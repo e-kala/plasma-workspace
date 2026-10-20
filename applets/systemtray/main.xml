@@ -32,6 +32,10 @@
     <entry name="iconOrder" type="StringList" hidden="true">
       <default></default>
     </entry>
+    <entry name="manualIconOrder" type="bool">
+      <label>Whether to use the custom icon order instead of grouping icons by category</label>
+      <default>false</default>
+    </entry>
     <entry name="reverseIconOrder" type="bool">
       <label>Whether to reverse the order of icons in the panel</label>
       <default>false</default>

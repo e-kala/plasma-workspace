@@ -17,6 +17,7 @@ static const QString SHOWN_ITEMS_KEY = QStringLiteral("shownItems");
 static const QString HIDDEN_ITEMS_KEY = QStringLiteral("hiddenItems");
 static const QString DISABLED_SNIS_KEY = QStringLiteral("disabledStatusNotifiers");
 static const QString ICON_ORDER_KEY = QStringLiteral("iconOrder");
+static const QString MANUAL_ICON_ORDER_KEY = QStringLiteral("manualIconOrder");
 
 SystemTraySettings::SystemTraySettings(KConfigLoader *config, QObject *parent)
     : QObject(parent)
@@ -112,6 +113,21 @@ void SystemTraySettings::setItemOrder(const QStringList &order)
     Q_EMIT itemOrderChanged();
 }
 
+bool SystemTraySettings::isManualItemOrder() const
+{
+    return m_manualItemOrder;
+}
+
+void SystemTraySettings::setManualItemOrder(bool manual)
+{
+    if (manual == m_manualItemOrder) {
+        return;
+    }
+    m_manualItemOrder = manual;
+    writeConfigValue(MANUAL_ICON_ORDER_KEY, m_manualItemOrder);
+    Q_EMIT itemOrderChanged();
+}
+
 void SystemTraySettings::cleanupPlugin(const QString &pluginId)
 {
     removeKnownPlugin(pluginId);
@@ -149,8 +165,10 @@ void SystemTraySettings::loadConfig()
     m_disabledStatusNotifiers = config->property(DISABLED_SNIS_KEY).toStringList();
 
     QStringList itemOrder = config->property(ICON_ORDER_KEY).toStringList();
-    if (itemOrder != m_itemOrder) {
+    const bool manualItemOrder = config->property(MANUAL_ICON_ORDER_KEY).toBool();
+    if (itemOrder != m_itemOrder || manualItemOrder != m_manualItemOrder) {
         m_itemOrder = itemOrder;
+        m_manualItemOrder = manualItemOrder;
         Q_EMIT itemOrderChanged();
     }
 

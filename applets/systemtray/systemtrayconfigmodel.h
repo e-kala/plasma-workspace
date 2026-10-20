@@ -14,7 +14,7 @@ class SystemTrayConfigModel : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(QStringList order READ order WRITE setOrder NOTIFY orderChanged)
-    Q_PROPERTY(bool grouped READ isGrouped NOTIFY orderChanged)
+    Q_PROPERTY(bool grouped READ isGrouped WRITE setGrouped NOTIFY groupedChanged)
     Q_PROPERTY(QString filterText READ filterText WRITE setFilterText NOTIFY filterTextChanged)
 
 public:
@@ -27,16 +27,16 @@ public:
     QStringList order() const;
     void setOrder(const QStringList &order);
     bool isGrouped() const;
+    void setGrouped(bool grouped);
 
     QString filterText() const;
     void setFilterText(const QString &filterText);
-
-    Q_INVOKABLE void setGrouped(bool grouped);
 
     Q_INVOKABLE void move(int from, int to);
 
 Q_SIGNALS:
     void orderChanged();
+    void groupedChanged();
     void filterTextChanged();
 
 private:
@@ -50,5 +50,6 @@ private:
     QPointer<QAbstractItemModel> m_sourceModel;
     QList<QPersistentModelIndex> m_rows;
     QStringList m_order;
+    bool m_grouped = true;
     QString m_filterText;
 };

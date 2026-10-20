@@ -36,6 +36,7 @@ private Q_SLOTS:
     void testCustomOrderNoDuplicates();
     void testCustomOrderWithDuplicateItemIds();
     void testUnlistedItemsFollowListedOnes();
+    void testCustomOrderIgnoredWhenGrouped();
 };
 
 void SortedSystemTrayModelTest::init()
@@ -114,6 +115,7 @@ void SortedSystemTrayModelTest::testCustomOrderMovesNotifications()
     SortedSystemTrayModel proxy(settings);
     proxy.setSourceModel(&source);
 
+    settings->setManualItemOrder(true);
     settings->setItemOrder({u"alpha"_s, u"org.kde.plasma.notifications"_s});
 
     QCOMPARE(itemIds(proxy), (QStringList{u"alpha"_s, u"org.kde.plasma.notifications"_s, u"unknown"_s}));
@@ -132,6 +134,7 @@ void SortedSystemTrayModelTest::testCustomOrderNoDuplicates()
     SortedSystemTrayModel proxy(settings);
     proxy.setSourceModel(&source);
 
+    settings->setManualItemOrder(true);
     settings->setItemOrder({u"c"_s, u"a"_s, u"b"_s});
 
     QCOMPARE(itemIds(proxy), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
@@ -150,6 +153,7 @@ void SortedSystemTrayModelTest::testCustomOrderWithDuplicateItemIds()
     SortedSystemTrayModel proxy(settings);
     proxy.setSourceModel(&source);
 
+    settings->setManualItemOrder(true);
     settings->setItemOrder({u"foo"_s, u"bar"_s, u"foo"_s});
 
     QCOMPARE(itemIds(proxy), (QStringList{u"foo"_s, u"bar"_s, u"foo"_s}));
@@ -171,9 +175,34 @@ void SortedSystemTrayModelTest::testUnlistedItemsFollowListedOnes()
     SortedSystemTrayModel proxy(settings);
     proxy.setSourceModel(&source);
 
+    settings->setManualItemOrder(true);
     settings->setItemOrder({u"hardware"_s, u"app"_s});
 
     QCOMPARE(itemIds(proxy), (QStringList{u"hardware"_s, u"app"_s, u"unknown"_s, u"communications"_s}));
+}
+
+void SortedSystemTrayModelTest::testCustomOrderIgnoredWhenGrouped()
+{
+    QPointer<SystemTraySettings> settings = createSettings();
+
+    MockTrayModel source({
+        {u"a"_s, u"ApplicationStatus"_s},
+        {u"b"_s, u"ApplicationStatus"_s},
+        {u"c"_s, u"ApplicationStatus"_s},
+    });
+
+    SortedSystemTrayModel proxy(settings);
+    proxy.setSourceModel(&source);
+
+    settings->setItemOrder({u"c"_s, u"a"_s, u"b"_s});
+    QCOMPARE(itemIds(proxy), (QStringList{u"a"_s, u"b"_s, u"c"_s}));
+
+    settings->setManualItemOrder(true);
+    QCOMPARE(itemIds(proxy), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
+
+    settings->setManualItemOrder(false);
+    QCOMPARE(itemIds(proxy), (QStringList{u"a"_s, u"b"_s, u"c"_s}));
+    QCOMPARE(settings->itemOrder(), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
 }
 
 QTEST_MAIN(SortedSystemTrayModelTest)

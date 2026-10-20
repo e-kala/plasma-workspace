@@ -105,6 +105,7 @@ void SystemTrayConfigModelTest::testManualOrder()
     QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
 
     model.setOrder({u"hotel"_s, u"alpha"_s, u"bravo"_s});
+    model.setGrouped(false);
 
     QVERIFY(!model.isGrouped());
     QCOMPARE(rows(model), (QStringList{u"hotel"_s, u"alpha"_s, u"bravo"_s}));
@@ -117,26 +118,35 @@ void SystemTrayConfigModelTest::testSwitchingOrderMode()
     SystemTrayConfigModel model(&source);
     QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
     QSignalSpy orderSpy(&model, &SystemTrayConfigModel::orderChanged);
+    QSignalSpy groupedSpy(&model, &SystemTrayConfigModel::groupedChanged);
     QSignalSpy layoutSpy(&model, &QAbstractItemModel::layoutChanged);
     QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
 
     model.setGrouped(false);
-    QCOMPARE(orderSpy.count(), 1);
-    QCOMPARE(model.order(), (QStringList{u"alpha"_s, u"bravo"_s, u"hotel"_s}));
+    QCOMPARE(groupedSpy.count(), 1);
+    QCOMPARE(orderSpy.count(), 0);
+    QVERIFY(model.order().isEmpty());
     QCOMPARE(rows(model), (QStringList{u"alpha"_s, u"bravo"_s, u"hotel"_s}));
 
     model.setGrouped(false);
-    QCOMPARE(orderSpy.count(), 1);
+    QCOMPARE(groupedSpy.count(), 1);
 
     model.move(0, 2);
     QCOMPARE(rows(model), (QStringList{u"bravo"_s, u"hotel"_s, u"alpha"_s}));
+    QCOMPARE(model.order(), (QStringList{u"bravo"_s, u"hotel"_s, u"alpha"_s}));
+    QCOMPARE(orderSpy.count(), 1);
     QSignalSpy moveSpy(&model, &QAbstractItemModel::rowsMoved);
 
     model.setGrouped(true);
-    QCOMPARE(orderSpy.count(), 3);
-    QVERIFY(model.order().isEmpty());
+    QCOMPARE(groupedSpy.count(), 2);
     QCOMPARE(rows(model), (QStringList{u"#ApplicationStatus"_s, u"alpha"_s, u"bravo"_s, u"#Hardware"_s, u"hotel"_s}));
     QVERIFY(moveSpy.count() > 0);
+
+    model.setGrouped(false);
+    QCOMPARE(groupedSpy.count(), 3);
+    QCOMPARE(orderSpy.count(), 1);
+    QCOMPARE(model.order(), (QStringList{u"bravo"_s, u"hotel"_s, u"alpha"_s}));
+    QCOMPARE(rows(model), (QStringList{u"bravo"_s, u"hotel"_s, u"alpha"_s}));
     QCOMPARE(layoutSpy.count(), 0);
     QCOMPARE(resetSpy.count(), 0);
 }
@@ -159,7 +169,10 @@ void SystemTrayConfigModelTest::testSwitchingOrderModeKeepsNotificationsFirst()
                           u"hotel"_s}));
 
     model.setGrouped(false);
-    QCOMPARE(model.order(), (QStringList{u"org.kde.plasma.notifications"_s, u"alpha"_s, u"bravo"_s, u"hotel"_s}));
+    QCOMPARE(rows(model), (QStringList{u"org.kde.plasma.notifications"_s, u"alpha"_s, u"bravo"_s, u"hotel"_s}));
+
+    model.move(3, 2);
+    QCOMPARE(model.order(), (QStringList{u"org.kde.plasma.notifications"_s, u"alpha"_s, u"hotel"_s, u"bravo"_s}));
 }
 
 void SystemTrayConfigModelTest::testMove()
@@ -168,6 +181,7 @@ void SystemTrayConfigModelTest::testMove()
     SystemTrayConfigModel model(&source);
     QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
     model.setOrder({u"alpha"_s, u"bravo"_s, u"hotel"_s});
+    model.setGrouped(false);
 
     QSignalSpy moveSpy(&model, &QAbstractItemModel::rowsMoved);
     QSignalSpy layoutSpy(&model, &QAbstractItemModel::layoutChanged);
@@ -191,6 +205,7 @@ void SystemTrayConfigModelTest::testMoveKeepsPositionOfAbsentItems()
     MockTrayModel source(items());
     SystemTrayConfigModel model(&source);
     model.setOrder({u"xray"_s, u"alpha"_s, u"yankee"_s, u"bravo"_s, u"hotel"_s});
+    model.setGrouped(false);
     QCOMPARE(rows(model), (QStringList{u"alpha"_s, u"bravo"_s, u"hotel"_s}));
 
     model.move(2, 0);
@@ -209,6 +224,7 @@ void SystemTrayConfigModelTest::testMoveIgnoredWhenGroupedOrFiltered()
     QCOMPARE(orderSpy.count(), 0);
 
     model.setOrder({u"alpha"_s, u"bravo"_s, u"hotel"_s});
+    model.setGrouped(false);
     model.setFilterText(u"o"_s);
     QCOMPARE(rows(model), (QStringList{u"bravo"_s, u"hotel"_s}));
     model.move(0, 1);
@@ -261,6 +277,7 @@ void SystemTrayConfigModelTest::testSourceChangesWithManualOrder()
     SystemTrayConfigModel model(&source);
     QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
     model.setOrder({u"bravo"_s, u"hotel"_s, u"alpha"_s});
+    model.setGrouped(false);
     QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
     QSignalSpy orderSpy(&model, &SystemTrayConfigModel::orderChanged);
 
@@ -320,6 +337,7 @@ void SystemTrayConfigModelTest::testMoveWithDuplicateItemIds()
     SystemTrayConfigModel model(&source);
     QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
     model.setOrder({u"foo"_s, u"bar"_s, u"foo"_s});
+    model.setGrouped(false);
     QCOMPARE(names(model), (QStringList{u"Foo 1"_s, u"Bar"_s, u"Foo 2"_s}));
 
     QSignalSpy moveSpy(&model, &QAbstractItemModel::rowsMoved);

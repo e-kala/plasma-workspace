@@ -38,6 +38,7 @@ KCMUtils.ScrollViewKCM {
     property list<string> cfg_extraItems: []
     property list<string> cfg_disabledStatusNotifiers: []
     property list<string> cfg_iconOrder: []
+    property bool cfg_manualIconOrder
 
     // We can share one combobox model across all delegates, they all have the same options
     readonly property var comboBoxModel: {
@@ -65,12 +66,18 @@ KCMUtils.ScrollViewKCM {
     readonly property var changedVisibility: new Map()
 
     readonly property var configModel: Plasmoid.configSystemTrayModel
-    readonly property bool isGrouped: cfg_iconOrder.length === 0
+    readonly property bool isGrouped: !cfg_manualIconOrder
 
     Binding {
         target: iconsPage.configModel
         property: "order"
         value: iconsPage.cfg_iconOrder
+    }
+
+    Binding {
+        target: iconsPage.configModel
+        property: "grouped"
+        value: iconsPage.isGrouped
     }
 
     Connections {
@@ -378,7 +385,7 @@ KCMUtils.ScrollViewKCM {
                         currentIndex: iconsPage.isGrouped ? 0 : 1
 
                         onActivated: index => {
-                            iconsPage.configModel.setGrouped(index === 0);
+                            iconsPage.cfg_manualIconOrder = index === 1;
                             currentIndex = Qt.binding(() => iconsPage.isGrouped ? 0 : 1);
                         }
                     }

@@ -39,6 +39,8 @@ public:
 
     const QStringList itemOrder() const;
     void setItemOrder(const QStringList &order);
+    bool isManualItemOrder() const;
+    void setManualItemOrder(bool manual);
 
     void cleanupPlugin(const QString &pluginId);
 
@@ -59,4 +61,5 @@ private:
     QStringList m_knownItems;
     QStringList m_disabledStatusNotifiers;
     QStringList m_itemOrder;
+    bool m_manualItemOrder = false;
 };

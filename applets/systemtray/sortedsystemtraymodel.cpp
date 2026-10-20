@@ -33,7 +33,7 @@ SortedSystemTrayModel::SortedSystemTrayModel(QPointer<SystemTraySettings> settin
 
 bool SortedSystemTrayModel::lessThan(const QModelIndex &left, const QModelIndex &right) const
 {
-    return compare(left, right, m_settings ? m_settings->itemOrder() : QStringList()) < 0;
+    return compare(left, right, m_settings && m_settings->isManualItemOrder() ? m_settings->itemOrder() : QStringList()) < 0;
 }
 
 int SortedSystemTrayModel::compare(const QModelIndex &left, const QModelIndex &right, const QStringList &order)

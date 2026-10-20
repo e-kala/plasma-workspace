@@ -99,7 +99,7 @@ void SystemTrayConfigModel::setOrder(const QStringList &order)
 
 bool SystemTrayConfigModel::isGrouped() const
 {
-    return m_order.isEmpty();
+    return m_grouped;
 }
 
 QString SystemTrayConfigModel::filterText() const
@@ -119,25 +119,13 @@ void SystemTrayConfigModel::setFilterText(const QString &filterText)
 
 void SystemTrayConfigModel::setGrouped(bool grouped)
 {
-    if (grouped == isGrouped()) {
+    if (grouped == m_grouped) {
         return;
     }
-
-    if (grouped) {
-        setOrderInternal({});
-        return;
-    }
-
-    QList<QPersistentModelIndex> entries = sortedEntries();
-    std::stable_sort(entries.begin(), entries.end(), [](const QPersistentModelIndex &left, const QPersistentModelIndex &right) {
-        return SortedSystemTrayModel::compare(left, right, QStringList()) < 0;
-    });
-
-    QStringList order;
-    for (const QPersistentModelIndex &entry : std::as_const(entries)) {
-        order.append(entry.data(s_itemIdRole).toString());
-    }
-    setOrderInternal(order);
+    // The manual order is kept while grouped, so switching back restores it
+    m_grouped = grouped;
+    update();
+    Q_EMIT groupedChanged();
 }
 
 void SystemTrayConfigModel::move(int from, int to)
