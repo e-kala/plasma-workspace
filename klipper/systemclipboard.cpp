@@ -29,6 +29,7 @@
 #include "../c_ptr.h"
 #include "historyitem.h"
 #include "klipper_debug.h"
+#include "mimetypes.h"
 #include "updateclipboardjob.h"
 #include <wayland-client-core.h>
 
@@ -107,11 +108,31 @@ void DatabaseRecordToMimeDataJob::start()
 
 QMimeData *DatabaseRecordToMimeDataJob::mimeData() const
 {
+    const auto pngIt = std::ranges::find_if(m_mimeDataList, [](const auto &pair) {
+        return pair.first == MimeTypes::png;
+    });
+    // Reverse iterators need to be converted to the previous base iterator if
+    // you want to compare them with normal iterators.
+    const auto lastImageIt = [&] {
+        auto it = std::ranges::find_if(m_mimeDataList | std::views::reverse, [](const auto &pair) {
+            return pair.first.startsWith(MimeTypes::imagePrefix);
+        });
+        // Avoid moving to an invalid address by checking against crend()
+        return it == m_mimeDataList.crend() ? m_mimeDataList.cend() : std::prev(it.base());
+    }();
+    bool hasPng = pngIt != m_mimeDataList.cend();
     auto mimeData = new QMimeData;
-    for (auto &[format, data] : m_mimeDataList) {
+    for (auto it = m_mimeDataList.cbegin(); it != m_mimeDataList.cend(); ++it) {
+        const auto [format, data] = *it;
         mimeData->setData(format, data);
-        if (format == s_imageFormat) {
-            mimeData->setImageData(QImage::fromData(data, "PNG"));
+        if (it == pngIt // Ensure PNG so web browsers can accept image data.
+            || (!hasPng && it == lastImageIt)) {
+            const auto image = QImage::fromData(data);
+            // Don't add extra formats if the image can't be read.
+            if (!image.isNull()) {
+                mimeData->setImageData(image);
+                hasPng = true;
+            }
         }
     }
     return mimeData;
