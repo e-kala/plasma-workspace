@@ -373,12 +373,16 @@ KCMUtils.ScrollViewKCM {
                     }
                 },
                 Kirigami.Action {
-                    displayHint: Kirigami.DisplayHint.KeepVisible
+                    displayComponent: Kirigami.SearchField {
+                        // The config model outlives this page, so reset any filter left from a previous session
+                        Component.onCompleted: iconsPage.configModel.filterText = text
+                        onTextChanged: iconsPage.configModel.filterText = text
+                    }
+                },
+                Kirigami.Action {
+                    text: i18nc("@title:menu Submenu for choosing how System Tray entries are ordered", "Entry Order")
                     displayComponent: QQC2.ComboBox {
-                        model: [
-                            i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category"),
-                            i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order")
-                        ]
+                        model: [groupedAction.text, manualOrderAction.text]
 
                         implicitContentWidthPolicy: QQC2.ComboBox.WidestText
 
@@ -389,21 +393,33 @@ KCMUtils.ScrollViewKCM {
                             currentIndex = Qt.binding(() => iconsPage.isGrouped ? 0 : 1);
                         }
                     }
+
+                    Kirigami.Action {
+                        id: groupedAction
+                        checkable: true
+                        checked: iconsPage.isGrouped
+                        text: i18nc("@item:inlistbox Entries are automatically grouped and sorted by category", "Grouped by category")
+                        onTriggered: {
+                            iconsPage.cfg_manualIconOrder = false;
+                            checked = Qt.binding(() => iconsPage.isGrouped);
+                        }
+                    }
+                    Kirigami.Action {
+                        id: manualOrderAction
+                        checkable: true
+                        checked: !iconsPage.isGrouped
+                        text: i18nc("@item:inlistbox Entries are freely reordered by the user", "Manual order")
+                        onTriggered: {
+                            iconsPage.cfg_manualIconOrder = true;
+                            checked = Qt.binding(() => !iconsPage.isGrouped);
+                        }
+                    }
                 },
                 Kirigami.Action {
-                    displayHint: Kirigami.DisplayHint.KeepVisible
                     enabled: !iconsPage.isGrouped && iconsPage.cfg_iconOrder.length > 0
                     icon.name: "edit-reset-symbolic"
                     text: i18nc("@action:button Restore the default order of System Tray entries", "Reset Order")
                     onTriggered: iconsPage.cfg_iconOrder = []
-                },
-                Kirigami.Action {
-                    displayHint: Kirigami.DisplayHint.KeepVisible
-                    displayComponent: Kirigami.SearchField {
-                        // The config model outlives this page, so reset any filter left from a previous session
-                        Component.onCompleted: iconsPage.configModel.filterText = text
-                        onTextChanged: iconsPage.configModel.filterText = text
-                    }
                 }
             ]
         }
