@@ -122,6 +122,8 @@ private:
 
     std::optional<QColor> m_accentColor;
     QPointer<PlasmaQuick::ConfigView> m_configView;
+    // page to restore when the config dialog is reopened after changing the containment type
+    QUrl m_pendingConfigPage;
     QPointer<QScreen> m_screenToFollow;
     LayerShellQt::Window *m_layerWindow = nullptr;
     QString m_krunnerText;

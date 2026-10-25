@@ -361,22 +361,49 @@ KCMUtils.ScrollViewKCM {
             actions: [
                 Kirigami.Action {
                     id: showAllCheckBox
+                    property real delegateWidth
                     checkable: true
                     text: i18nc("@option:check, This is referring to system tray entries", "Always show all")
+                    displayHint: searchAction.showAllFits ? Kirigami.DisplayHint.NoPreference : Kirigami.DisplayHint.AlwaysHide
                     onToggled: iconsPage.cfg_showAllItems = checked
                     checked: iconsPage.cfg_showAllItems
                     displayComponent: QQC2.CheckBox {
+                        id: showAllDelegate
                         horizontalPadding: Kirigami.Units.largeSpacing
                         text: showAllCheckBox.text
                         checked: showAllCheckBox.checked
                         onToggled: showAllCheckBox.toggle()
+
+                        Binding {
+                            target: showAllCheckBox
+                            property: "delegateWidth"
+                            value: showAllDelegate.implicitWidth
+                            restoreMode: Binding.RestoreNone
+                        }
                     }
                 },
                 Kirigami.Action {
+                    id: searchAction
+                    property bool showAllFits: true
+                    icon.name: "search"
+                    text: i18nc("@action:button", "Search")
+                    displayHint: Kirigami.DisplayHint.KeepVisible
                     displayComponent: Kirigami.SearchField {
+                        id: searchField
                         // The config model outlives this page, so reset any filter left from a previous session
                         Component.onCompleted: iconsPage.configModel.filterText = text
                         onTextChanged: iconsPage.configModel.filterText = text
+
+                        Binding {
+                            target: searchAction
+                            property: "showAllFits"
+                            when: searchField.parent?.minimumWidth !== undefined
+                            value: {
+                                const toolBar = searchField.parent;
+                                return showAllCheckBox.delegateWidth + searchField.implicitWidth + toolBar.minimumWidth + 2 * toolBar.spacing < toolBar.width;
+                            }
+                            restoreMode: Binding.RestoreNone
+                        }
                     }
                 },
                 Kirigami.Action {
