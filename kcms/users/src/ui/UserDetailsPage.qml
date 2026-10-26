@@ -10,7 +10,6 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 
 import org.kde.kirigami as Kirigami
-import org.kde.kirigamiaddons.components as KirigamiComponents
 import org.kde.kcmutils as KCM
 import org.kde.plasma.kcm.users as UsersKCM
 
@@ -128,7 +127,7 @@ KCM.SimpleKCM {
     }
 
     ColumnLayout {
-        KirigamiComponents.AvatarButton {
+        Kirigami.AvatarButton {
             readonly property int size: 6 * Kirigami.Units.gridUnit
 
             Layout.preferredWidth: size
