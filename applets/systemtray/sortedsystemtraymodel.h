@@ -22,11 +22,14 @@ public:
 
     static QString category(const QModelIndex &index);
 
+    Q_INVOKABLE void move(int from, int to);
+
 protected:
     bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const override;
 
 private:
     static int orderIndex(const QModelIndex &index, const QStringList &order);
+    QStringList mergedOrder() const;
 
     QPointer<SystemTraySettings> m_settings;
 };

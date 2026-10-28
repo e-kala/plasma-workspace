@@ -412,6 +412,15 @@ QAbstractItemModel *SystemTray::configSystemTrayModel()
     return m_configSystemTrayModel;
 }
 
+void SystemTray::moveItem(const QModelIndex &from, const QModelIndex &to)
+{
+    auto *model = static_cast<SortedSystemTrayModel *>(sortedSystemTrayModel());
+    if (!from.isValid() || !to.isValid() || from.model() != model || to.model() != model) {
+        return;
+    }
+    model->move(from.row(), to.row());
+}
+
 void SystemTray::onEnabledAppletsChanged()
 {
     // remove all that are not allowed anymore

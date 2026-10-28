@@ -9,6 +9,7 @@
 #include "systemtraymodel.h"
 #include "systemtraysettings.h"
 
+#include <QHash>
 #include <QList>
 
 static const QList<QString> s_categoryOrder = {
@@ -72,6 +73,57 @@ QString SortedSystemTrayModel::category(const QModelIndex &index)
 {
     const QString category = index.data(static_cast<int>(BaseModel::BaseRole::Category)).toString();
     return s_categoryOrder.contains(category) ? category : QStringLiteral("UnknownCategory");
+}
+
+void SortedSystemTrayModel::move(int from, int to)
+{
+    if (!m_settings || from == to || from < 0 || to < 0 || from >= rowCount() || to >= rowCount()) {
+        return;
+    }
+
+    QStringList order = mergedOrder();
+    const int fromIndex = orderIndex(mapToSource(index(from, 0)), order);
+    const int toIndex = orderIndex(mapToSource(index(to, 0)), order);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) {
+        return;
+    }
+
+    order.move(fromIndex, toIndex);
+    m_settings->setItemOrder(order);
+    m_settings->setManualItemOrder(true);
+}
+
+QStringList SortedSystemTrayModel::mergedOrder() const
+{
+    QStringList shown;
+    shown.reserve(rowCount());
+    for (int row = 0; row < rowCount(); ++row) {
+        shown.append(index(row, 0).data(static_cast<int>(BaseModel::BaseRole::ItemId)).toString());
+    }
+
+    if (!m_settings || !m_settings->isManualItemOrder()) {
+        return shown;
+    }
+
+    QHash<QString, int> remaining;
+    for (const QString &itemId : std::as_const(shown)) {
+        ++remaining[itemId];
+    }
+
+    QStringList order;
+    auto next = shown.cbegin();
+    for (const QString &itemId : m_settings->itemOrder()) {
+        if (remaining.value(itemId) > 0) {
+            --remaining[itemId];
+            order.append(*next++);
+        } else {
+            order.append(itemId);
+        }
+    }
+    while (next != shown.cend()) {
+        order.append(*next++);
+    }
+    return order;
 }
 
 int SortedSystemTrayModel::orderIndex(const QModelIndex &index, const QStringList &order)

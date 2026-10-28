@@ -65,6 +65,11 @@ public:
     Q_INVOKABLE bool isSystemTrayApplet(const QString &appletId);
 
     /**
+     * Moves an item in the persisted manual order.
+     */
+    Q_INVOKABLE void moveItem(const QModelIndex &from, const QModelIndex &to);
+
+    /**
      * Needed to preserve keyboard navigation
      */
     Q_INVOKABLE void stackItemBefore(QQuickItem *newItem, QQuickItem *beforeItem);

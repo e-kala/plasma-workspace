@@ -35,8 +35,10 @@ PlasmaCore.ToolTipArea {
     readonly property alias iconContainer: iconContainer
     readonly property bool inHiddenLayout: effectiveStatus === PlasmaCore.Types.PassiveStatus
     readonly property bool inVisibleLayout: effectiveStatus === PlasmaCore.Types.ActiveStatus
+    readonly property GridView itemView: parent?.GridView.view ?? null
 
     property bool effectivePressed: false
+    property int reorderIndex: -1
 
     // Keep these in sync with HiddenItems.qml
     readonly property int margins: Kirigami.Units.smallSpacing
@@ -56,6 +58,40 @@ PlasmaCore.ToolTipArea {
         running: (abstractItem.status === PlasmaCore.Types.NeedsAttentionStatus
                 || abstractItem.status === PlasmaCore.Types.RequiresAttentionStatus)
             && Kirigami.Units.longDuration > 0
+    }
+
+    DragHandler {
+        id: reorderHandler
+
+        target: null
+        acceptedButtons: Qt.LeftButton
+        dragThreshold: Application.styleHints.startDragDistance
+        grabPermissions: PointerHandler.CanTakeOverFromItems
+
+        onActiveChanged: {
+            if (active) {
+                abstractItem.reorderIndex = abstractItem.index;
+                abstractItem.hideImmediately();
+            } else {
+                Qt.callLater(() => abstractItem.reorderIndex = -1);
+            }
+        }
+
+        onCentroidChanged: {
+            if (!active || !abstractItem.itemView || abstractItem.reorderIndex < 0) {
+                return;
+            }
+
+            const view = abstractItem.itemView;
+            const position = view.contentItem.mapFromItem(abstractItem, centroid.position.x, centroid.position.y);
+            const targetIndex = view.indexAt(position.x, position.y);
+            if (targetIndex < 0 || targetIndex === abstractItem.reorderIndex) {
+                return;
+            }
+
+            root.moveTrayItem(view.model, abstractItem.reorderIndex, targetIndex);
+            abstractItem.reorderIndex = targetIndex;
+        }
     }
 
     MouseArea {
@@ -103,6 +139,7 @@ PlasmaCore.ToolTipArea {
         anchors.margins: abstractItem.inHiddenLayout ? abstractItem.margins : 0
 
         spacing: Kirigami.Units.smallSpacing
+        opacity: reorderHandler.active ? 0.6 : 1
 
         FocusScope {
             id: iconContainer

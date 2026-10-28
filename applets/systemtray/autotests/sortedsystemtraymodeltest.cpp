@@ -37,6 +37,9 @@ private Q_SLOTS:
     void testCustomOrderWithDuplicateItemIds();
     void testUnlistedItemsFollowListedOnes();
     void testCustomOrderIgnoredWhenGrouped();
+    void testMoveEnablesManualOrder();
+    void testMovePreservesAbsentItems();
+    void testInvalidMoveIgnored();
 };
 
 void SortedSystemTrayModelTest::init()
@@ -203,6 +206,63 @@ void SortedSystemTrayModelTest::testCustomOrderIgnoredWhenGrouped()
     settings->setManualItemOrder(false);
     QCOMPARE(itemIds(proxy), (QStringList{u"a"_s, u"b"_s, u"c"_s}));
     QCOMPARE(settings->itemOrder(), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
+}
+
+void SortedSystemTrayModelTest::testMoveEnablesManualOrder()
+{
+    QPointer<SystemTraySettings> settings = createSettings();
+    MockTrayModel source({
+        {u"a"_s, u"ApplicationStatus"_s},
+        {u"b"_s, u"ApplicationStatus"_s},
+        {u"c"_s, u"ApplicationStatus"_s},
+    });
+    SortedSystemTrayModel proxy(settings);
+    proxy.setSourceModel(&source);
+
+    proxy.move(2, 0);
+
+    QVERIFY(settings->isManualItemOrder());
+    QCOMPARE(settings->itemOrder(), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
+    QCOMPARE(itemIds(proxy), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
+}
+
+void SortedSystemTrayModelTest::testMovePreservesAbsentItems()
+{
+    QPointer<SystemTraySettings> settings = createSettings();
+    settings->setItemOrder({u"a"_s, u"missing"_s, u"b"_s, u"c"_s});
+    settings->setManualItemOrder(true);
+
+    MockTrayModel source({
+        {u"a"_s, u"ApplicationStatus"_s},
+        {u"b"_s, u"ApplicationStatus"_s},
+        {u"c"_s, u"ApplicationStatus"_s},
+    });
+    SortedSystemTrayModel proxy(settings);
+    proxy.setSourceModel(&source);
+
+    proxy.move(2, 0);
+
+    QCOMPARE(settings->itemOrder(), (QStringList{u"c"_s, u"a"_s, u"missing"_s, u"b"_s}));
+    QCOMPARE(itemIds(proxy), (QStringList{u"c"_s, u"a"_s, u"b"_s}));
+}
+
+void SortedSystemTrayModelTest::testInvalidMoveIgnored()
+{
+    QPointer<SystemTraySettings> settings = createSettings();
+    MockTrayModel source({
+        {u"a"_s, u"ApplicationStatus"_s},
+        {u"b"_s, u"ApplicationStatus"_s},
+    });
+    SortedSystemTrayModel proxy(settings);
+    proxy.setSourceModel(&source);
+
+    proxy.move(-1, 0);
+    proxy.move(0, 2);
+    proxy.move(0, 0);
+
+    QVERIFY(!settings->isManualItemOrder());
+    QVERIFY(settings->itemOrder().isEmpty());
+    QCOMPARE(itemIds(proxy), (QStringList{u"a"_s, u"b"_s}));
 }
 
 QTEST_MAIN(SortedSystemTrayModelTest)

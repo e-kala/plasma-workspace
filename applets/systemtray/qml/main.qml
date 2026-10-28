@@ -37,6 +37,15 @@ ContainmentItem {
 
     readonly property alias hiddenModel: hiddenModel
 
+    function moveTrayItem(filteredModel: var, from: int, to: int): void {
+        if (from === to || from < 0 || to < 0) {
+            return;
+        }
+        const fromIndex = filteredModel.mapToSource(filteredModel.index(from, 0));
+        const toIndex = filteredModel.mapToSource(filteredModel.index(to, 0));
+        Plasmoid.moveItem(fromIndex, toIndex);
+    }
+
     Component.onCompleted: {
         // We need all the plasmoiditems to be there for correct working of shortcuts.
         // Instantiators create the plasmoiditems: ensure this is done after
